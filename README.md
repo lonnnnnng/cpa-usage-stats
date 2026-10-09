@@ -70,12 +70,12 @@ http://127.0.0.1:8317/v0/resource/plugins/cpa-usage-stats/dashboard
 **前置要求**
 
 - Go 1.25+（需 CGO，装有 GCC 或 Clang）
-- Bun 1.4+
+- Node.js 22+ & pnpm 10+
 
 ```bash
-./build.sh               # 打包前端并编译 CGO 动态库
-go test ./...            # 后端测试
-cd web && bun run dev    # 单独调试前端
+./build.sh                # 打包前端并编译 CGO 动态库
+go test ./...             # 后端测试
+cd web && pnpm run dev    # 单独调试前端
 ```
 
 **前端技术栈**

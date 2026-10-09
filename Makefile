@@ -14,8 +14,8 @@ endif
 all: build
 
 build-web:
-	@echo "==> Building Web Frontend with Bun & Vite..."
-	@cd web && bun install && bun run build
+	@echo "==> Building Web Frontend with pnpm & Vite..."
+	@cd web && pnpm install && pnpm run build
 
 build: build-web
 	@echo "==> Compiling CGO Shared Library ($(PLUGIN_NAME).$(EXT))..."
