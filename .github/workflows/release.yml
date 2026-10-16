@@ -15,13 +15,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12.10.1
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+          cache-dependency-path: web/pnpm-lock.yaml
       - name: Install and Build Frontend
         working-directory: web
         run: |
-          bun install --frozen-lockfile
-          bun run build
+          pnpm install --frozen-lockfile
+          pnpm run build
       - name: Upload frontend artifact
         uses: actions/upload-artifact@v7
         with:

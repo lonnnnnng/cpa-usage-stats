@@ -10,9 +10,9 @@ case "${OS_NAME}" in
     *) EXT="so" ;;
 esac
 
-echo "==> Step 1: Building Web Frontend with bun & Vite..."
+echo "==> Step 1: Building Web Frontend with pnpm & Vite..."
 cd web
-bun run build
+pnpm run build
 cd ..
 
 echo "==> Step 2: Compiling CGO Shared Library (${PLUGIN_NAME}.${EXT})..."

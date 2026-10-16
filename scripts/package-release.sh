@@ -19,8 +19,8 @@ mkdir -p "${DIST_DIR}"
 
 echo "==> Step 1: Building Web frontend..."
 cd web
-bun install
-bun run build
+pnpm install
+pnpm run build
 cd ..
 
 LIB_NAME="${PLUGIN_ID}.${EXT}"
