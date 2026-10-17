@@ -30,6 +30,8 @@ type UsageRecord struct {
 	Model               string        `json:"Model,omitempty"`
 	Alias               string        `json:"Alias,omitempty"`
 	APIKey              string        `json:"APIKey,omitempty"`
+	IsNativeKey         bool          `json:"IsNativeKey,omitempty"`
+	AccessProvider      string        `json:"AccessProvider,omitempty"`
 	SessionID           string        `json:"SessionID,omitempty"`
 	ParentSessionID     string        `json:"ParentSessionID,omitempty"`
 	AuthID              string        `json:"AuthID,omitempty"`
@@ -83,6 +85,8 @@ type StoredRecord struct {
 	ResponseModel       string              `json:"response_model"`
 	Alias               string              `json:"alias"`
 	APIKey              string              `json:"api_key"`
+	IsNativeKey         bool                `json:"is_native_key"`
+	AccessProvider      string              `json:"access_provider,omitempty"`
 	AuthID              string              `json:"auth_id"`
 	AuthIndex           string              `json:"auth_index"`
 	AuthType            string              `json:"auth_type"`

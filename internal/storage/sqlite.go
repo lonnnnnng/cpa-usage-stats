@@ -161,6 +161,8 @@ var tableColumns = []struct{ name, ddl string }{
 	{"response_model", "TEXT"},
 	{"alias", "TEXT"},
 	{"api_key", "TEXT"},
+	{"is_native_key", "INTEGER NOT NULL DEFAULT 0"},
+	{"access_provider", "TEXT"},
 	{"auth_id", "TEXT"},
 	{"auth_index", "TEXT"},
 	{"auth_type", "TEXT"},
@@ -289,14 +291,14 @@ func (s *Storage) InsertBatch(records []model.UsageRecord) error {
 	stmt, err := tx.Prepare(`
 		INSERT INTO usage_records (
 			request_id, trace_id, session_id, parent_session_id, provider, base_url,
-			executor_type, model, response_model, alias, api_key,
+			executor_type, model, response_model, alias, api_key, is_native_key, access_provider,
 			auth_id, auth_index, auth_type, source,
 			reasoning_effort, service_tier, response_service_tier,
 			stream, generate, requested_at, latency_ms, ttft_ms,
 			failed, status_code, error_type, failure_body, response_headers,
 			input_tokens, output_tokens, reasoning_tokens,
 			cached_tokens, cache_read_tokens, cache_creation_tokens, total_tokens
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`)
 	if err != nil {
 		return fmt.Errorf("prepare insert: %w", err)
@@ -331,6 +333,8 @@ func (s *Storage) InsertBatch(records []model.UsageRecord) error {
 			r.ResponseModel,
 			r.Alias,
 			r.APIKey,
+			r.IsNativeKey,
+			r.AccessProvider,
 			r.AuthID,
 			r.AuthIndex,
 			r.AuthType,
@@ -698,10 +702,12 @@ func (s *Storage) GetRecords(filter model.UsageFilter) (*model.RecordListRespons
 
 	rows, err := s.db.Query(fmt.Sprintf(`
 		SELECT
-			id, request_id, trace_id, session_id, parent_session_id, provider, base_url,
-			executor_type, model, response_model, alias, api_key,
-			auth_id, auth_index, auth_type, source,
-			reasoning_effort, service_tier, response_service_tier,
+			id, request_id, COALESCE(trace_id, ''), COALESCE(session_id, ''), COALESCE(parent_session_id, ''),
+			COALESCE(provider, ''), COALESCE(base_url, ''), COALESCE(executor_type, ''),
+			COALESCE(model, ''), COALESCE(response_model, ''), COALESCE(alias, ''), COALESCE(api_key, ''),
+			COALESCE(is_native_key, 0), COALESCE(access_provider, ''),
+			COALESCE(auth_id, ''), COALESCE(auth_index, ''), COALESCE(auth_type, ''), COALESCE(source, ''),
+			COALESCE(reasoning_effort, ''), COALESCE(service_tier, ''), COALESCE(response_service_tier, ''),
 			stream, generate, requested_at, latency_ms, ttft_ms,
 			failed, status_code, COALESCE(error_type, ''), COALESCE(failure_body, ''), COALESCE(response_headers, ''),
 			input_tokens, output_tokens, reasoning_tokens,
@@ -733,6 +739,8 @@ func (s *Storage) GetRecords(filter model.UsageFilter) (*model.RecordListRespons
 			&r.ResponseModel,
 			&r.Alias,
 			&r.APIKey,
+			&r.IsNativeKey,
+			&r.AccessProvider,
 			&r.AuthID,
 			&r.AuthIndex,
 			&r.AuthType,

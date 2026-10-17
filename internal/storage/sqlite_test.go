@@ -540,3 +540,92 @@ func TestRecordsFilterByAuthAndSession(t *testing.T) {
 		t.Errorf("session filter total = %d, want 2", bySession.Total)
 	}
 }
+
+func TestRecordsNativeKeyAndAccessProvider(t *testing.T) {
+	store, err := New(filepath.Join(t.TempDir(), "usage.db"))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer store.Close()
+
+	now := time.Now()
+	if err := store.InsertBatch([]model.UsageRecord{
+		{
+			RequestID:      "req-native",
+			APIKey:         "sk-native-key",
+			IsNativeKey:    true,
+			AccessProvider: "config-inline",
+			RequestedAt:    now,
+		},
+		{
+			RequestID:      "req-plugin",
+			APIKey:         "sk-plugin-key",
+			IsNativeKey:    false,
+			AccessProvider: "plugin-oauth",
+			RequestedAt:    now,
+		},
+	}); err != nil {
+		t.Fatalf("InsertBatch: %v", err)
+	}
+
+	res, err := store.GetRecords(model.UsageFilter{})
+	if err != nil {
+		t.Fatalf("GetRecords: %v", err)
+	}
+	if len(res.Items) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(res.Items))
+	}
+	// Descending order by id
+	pluginRec := res.Items[0]
+	nativeRec := res.Items[1]
+
+	if pluginRec.IsNativeKey != false || pluginRec.AccessProvider != "plugin-oauth" {
+		t.Errorf("pluginRec mismatch: %+v", pluginRec)
+	}
+	if nativeRec.IsNativeKey != true || nativeRec.AccessProvider != "config-inline" {
+		t.Errorf("nativeRec mismatch: %+v", nativeRec)
+	}
+}
+
+func TestMigrationAdditiveColumns(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "old_usage.db")
+	// 模拟旧版建表: 缺少 is_native_key 和 access_provider
+	rawDB, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("open raw db: %v", err)
+	}
+	_, err = rawDB.Exec(`
+		CREATE TABLE usage_records (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			request_id TEXT NOT NULL,
+			model TEXT,
+			api_key TEXT,
+			requested_at DATETIME NOT NULL
+		);
+		INSERT INTO usage_records (request_id, model, api_key, requested_at)
+		VALUES ('old-1', 'gpt-4o', 'sk-old', '2026-10-16 12:00:00.000');
+		PRAGMA user_version = 1;
+	`)
+	if err != nil {
+		t.Fatalf("seed old table: %v", err)
+	}
+	_ = rawDB.Close()
+
+	// 现版 New 会执行 ensureSchema()
+	store, err := New(dbPath)
+	if err != nil {
+		t.Fatalf("New with legacy db: %v", err)
+	}
+	defer store.Close()
+
+	res, err := store.GetRecords(model.UsageFilter{})
+	if err != nil {
+		t.Fatalf("GetRecords on migrated db: %v", err)
+	}
+	if len(res.Items) != 1 || res.Items[0].RequestID != "old-1" {
+		t.Fatalf("old record lost after migration: %+v", res.Items)
+	}
+	if res.Items[0].IsNativeKey != false || res.Items[0].AccessProvider != "" {
+		t.Errorf("migrated columns should have zero values: %+v", res.Items[0])
+	}
+}
