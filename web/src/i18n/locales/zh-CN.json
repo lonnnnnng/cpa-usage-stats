@@ -275,7 +275,8 @@
       "upstream": "上游 {{name}}",
       "cache": "缓存 读 {{read}} / 写 {{write}}",
       "throughput": "{{value}} t/s",
-      "copy_key": "复制完整 Key"
+      "copy_key": "复制完整 Key",
+      "native_key": "原生"
     },
     "detail": {
       "request_id": "Request ID",
@@ -284,6 +285,8 @@
       "source": "来源",
       "base_url": "上游 Base URL",
       "auth": "认证凭据",
+      "auth_source": "密钥来源",
+      "native_key": "CPA 原生配置密钥",
       "reasoning_effort": "推理力度",
       "service_tier": "Service Tier（请求 → 响应）",
       "mode": "模式与标记",
@@ -302,6 +305,7 @@
       "token_cache_read": "缓存读",
       "token_cache_write": "缓存写",
       "token_total": "总计",
+      "token_cache_rate": "缓存命中率",
       "estimate_label": "预估费用",
       "unmatched": "未匹配",
       "failure_title": "失败响应诊断（HTTP {{status}}）",

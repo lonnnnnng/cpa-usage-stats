@@ -300,6 +300,11 @@ function DetailRow({ record, cost }: { record: StoredRecord; cost: RecordCost | 
                     : t("records.detail.unmatched")
                 }
               />
+              <DetailItem
+                label={t("records.detail.auth_source")}
+                value={record.is_native_key ? t("records.detail.native_key") : record.access_provider || "-"}
+                badge={record.is_native_key || Boolean(record.access_provider)}
+              />
             </div>
           </section>
 
@@ -347,6 +352,13 @@ function DetailRow({ record, cost }: { record: StoredRecord; cost: RecordCost | 
                 <TokenStat
                   label={t("records.detail.token_cache_write")}
                   value={formatNumber(record.cache_creation_tokens)}
+                />
+              )}
+              {record.cache_read_tokens > 0 && record.input_tokens > 0 && (
+                <TokenStat
+                  label={t("records.detail.token_cache_rate")}
+                  value={`${((record.cache_read_tokens / (record.input_tokens + record.cache_read_tokens)) * 100).toFixed(1)}%`}
+                  emphasis
                 />
               )}
               <TokenStat label={t("records.detail.token_total")} value={formatNumber(record.total_tokens)} emphasis />
@@ -781,11 +793,19 @@ function RecordRows({
           </span>
         </TableCell>
         <TableCell className="w-32 text-right font-mono tabular-nums">
-          <span className="text-muted-foreground">{formatTokens(record.input_tokens)}</span>
-          {" / "}
-          <span className="text-muted-foreground">{formatTokens(record.output_tokens)}</span>
-          {" / "}
-          <span className="font-semibold">{formatTokens(record.total_tokens)}</span>
+          <div className="flex items-center justify-end gap-1">
+            <span className="text-muted-foreground" title={t("records.detail.token_input")}>
+              ↓{formatTokens(record.input_tokens)}
+            </span>
+            <span className="text-muted-foreground">/</span>
+            <span className="text-muted-foreground" title={t("records.detail.token_output")}>
+              ↑{formatTokens(record.output_tokens)}
+            </span>
+            <span className="text-muted-foreground">/</span>
+            <span className="font-semibold text-foreground" title={t("records.detail.token_total")}>
+              Σ{formatTokens(record.total_tokens)}
+            </span>
+          </div>
           {(record.cache_read_tokens > 0 || record.cache_creation_tokens > 0) && (
             <div className="text-xs text-muted-foreground">
               {t("records.row.cache", {
@@ -812,6 +832,19 @@ function RecordRows({
             <span className="min-w-0 truncate" title={record.api_key || record.auth_id || undefined}>
               {record.api_key ? maskApiKey(record.api_key) : record.auth_id || "-"}
             </span>
+            {record.is_native_key ? (
+              <Badge variant="secondary" className="shrink-0 text-[10px] px-1 py-0 font-normal">
+                {t("records.row.native_key")}
+              </Badge>
+            ) : record.access_provider ? (
+              <Badge
+                variant="outline"
+                className="shrink-0 max-w-16 truncate text-[10px] px-1 py-0 font-mono text-muted-foreground"
+                title={record.access_provider}
+              >
+                {record.access_provider}
+              </Badge>
+            ) : null}
             {record.auth_index && (
               <Badge variant="outline" className="shrink-0 font-mono text-[10px]">
                 #{record.auth_index}

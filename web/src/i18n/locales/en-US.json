@@ -275,7 +275,8 @@
       "upstream": "upstream {{name}}",
       "cache": "cache read {{read}} / write {{write}}",
       "throughput": "{{value}} t/s",
-      "copy_key": "Copy full key"
+      "copy_key": "Copy full key",
+      "native_key": "Native"
     },
     "detail": {
       "request_id": "Request ID",
@@ -284,6 +285,8 @@
       "source": "Source",
       "base_url": "Upstream base URL",
       "auth": "Auth credential",
+      "auth_source": "Access Source",
+      "native_key": "CPA Native Config Key",
       "reasoning_effort": "Reasoning effort",
       "service_tier": "Service tier (request → response)",
       "mode": "Mode & flags",
@@ -302,6 +305,7 @@
       "token_cache_read": "Cache read",
       "token_cache_write": "Cache write",
       "token_total": "Total",
+      "token_cache_rate": "Cache Hit Rate",
       "estimate_label": "Est. cost",
       "unmatched": "Unmatched",
       "failure_title": "Failure diagnostics (HTTP {{status}})",

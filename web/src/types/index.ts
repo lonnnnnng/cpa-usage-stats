@@ -80,6 +80,8 @@ export interface StoredRecord {
   response_model: string;
   alias: string;
   api_key: string;
+  is_native_key: boolean;
+  access_provider?: string;
   auth_id: string;
   auth_index: string;
   auth_type: string;
