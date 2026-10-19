@@ -6,7 +6,6 @@ import {
   CircleDollarSign,
   Clock,
   Cpu,
-  Database,
   Gauge,
   Timer,
   TrendingUp,
@@ -17,7 +16,6 @@ import { useState } from "react";
 import { CustomPriceModal } from "@/components/CustomPriceModal";
 import { ActivityHeatmap } from "@/components/charts/ActivityHeatmap";
 import { DimensionUsageChart } from "@/components/charts/DimensionUsageChart";
-import { DonutChart } from "@/components/charts/DonutChart";
 import { TokenBarChart } from "@/components/charts/TokenBarChart";
 import { TrendChart } from "@/components/charts/TrendChart";
 import { latencyTone, speedTone, toneTextClass } from "@/components/charts/UsageBarChart";
@@ -208,8 +206,8 @@ export function OverviewSummary({ summary, loading, pricing }: OverviewSectionPr
           />
         </div>
       </div>
-      {/* 宏观三图联动：调用走势 + Token 构成 + 渠道分布，卡片等高、图表区定高，避免内容少时上方留白 */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      {/* 宏观两图联动：调用走势 + Token 构成。渠道分布已在“用量分布”中按 Provider 维度展示，不重复画 */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* 图 1：调用走势 */}
         <Card className="flex flex-col">
           <CardHeader className="pb-2">
@@ -249,23 +247,6 @@ export function OverviewSummary({ summary, loading, pricing }: OverviewSectionPr
           </CardHeader>
           <CardContent className="flex flex-1 items-center pt-2">
             {loading ? <Skeleton className="h-52 w-full" /> : <TokenBarChart summary={summary} />}
-          </CardContent>
-        </Card>
-
-        {/* 图 3：Provider 渠道分布（环形图，使用 chart 色阶） */}
-        <Card className="flex flex-col">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-sm">
-              <Database className="size-4 text-muted-foreground" />
-              {t("overview.provider_title" as never)}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-1 items-center pt-2">
-            {loading ? (
-              <Skeleton className="h-52 w-full" />
-            ) : (
-              <DonutChart stats={summary?.provider_stats ?? []} metric="total_tokens" />
-            )}
           </CardContent>
         </Card>
       </div>
@@ -367,17 +348,20 @@ export function OverviewUsage({ summary, loading, pricing }: OverviewSectionProp
   const models = summary?.model_stats ?? [];
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
+    <div className="flex min-h-[calc(100svh-12rem)] flex-col gap-6">
+      {/* 未匹配定价的模型放在上方，图表占满剩余高度 */}
+      {!loading && <UnmatchedPricing models={models} pricing={pricing} />}
+
+      <Card className="flex min-h-0 flex-1 flex-col">
+        <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-sm">
             <ChartColumn className="size-4 text-muted-foreground" />
             {t("usage_tab.title")}
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex min-h-0 flex-1 flex-col pt-2">
           {loading ? (
-            <Skeleton className="h-72 w-full" />
+            <Skeleton className="min-h-72 w-full flex-1" />
           ) : (
             <DimensionUsageChart
               stats={{
@@ -394,8 +378,6 @@ export function OverviewUsage({ summary, loading, pricing }: OverviewSectionProp
           )}
         </CardContent>
       </Card>
-
-      {!loading && <UnmatchedPricing models={models} pricing={pricing} />}
     </div>
   );
 }

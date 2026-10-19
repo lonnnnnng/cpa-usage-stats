@@ -35,6 +35,8 @@ interface RecordsTabProps {
   page: number;
   onPageChange: (page: number) => void;
   pageSize: number;
+  onPageSizeChange: (size: number) => void;
+  pageSizeOptions: number[];
   pricing: PricingState;
 }
 
@@ -228,13 +230,8 @@ function DetailRow({ record, cost }: { record: StoredRecord; cost: RecordCost | 
     <TableRow className="bg-muted/30 hover:bg-muted/30">
       <TableCell colSpan={7} className="whitespace-normal px-4 py-3">
         <div className="space-y-3">
-          <div className="flex flex-wrap gap-x-5 gap-y-1.5">
-            {metaItems.map((item) => (
-              <CompactItem key={item.label} label={item.label} value={item.value} badge={item.badge} />
-            ))}
-          </div>
-
-          <div className="flex flex-wrap gap-x-4 gap-y-1.5 border-t pt-2.5">
+          {/* 词元与费用放在最上方，保持一行，便于快速扫读 */}
+          <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1.5">
             {tokenItems.map((item) => (
               <span key={item.label} className="inline-flex items-baseline gap-1 text-xs">
                 <span className="text-muted-foreground">{item.label}</span>
@@ -242,6 +239,13 @@ function DetailRow({ record, cost }: { record: StoredRecord; cost: RecordCost | 
                   {item.value}
                 </span>
               </span>
+            ))}
+          </div>
+
+          {/* 其余元信息一行一项，固定标签列让值左对齐 */}
+          <div className="grid gap-1.5 border-t pt-2.5">
+            {metaItems.map((item) => (
+              <CompactItem key={item.label} label={item.label} value={item.value} badge={item.badge} />
             ))}
           </div>
 
@@ -292,14 +296,14 @@ function CompactItem({ label, value, badge }: { label: string; value: string; ba
   };
 
   return (
-    <span className="inline-flex min-w-0 max-w-full items-baseline gap-1 text-xs">
-      <span className="shrink-0 text-muted-foreground">{label}</span>
+    <div className="grid min-w-0 grid-cols-[6.5rem_minmax(0,1fr)_auto] items-baseline gap-2 text-xs sm:grid-cols-[11rem_minmax(0,1fr)_auto]">
+      <span className="min-w-0 text-muted-foreground">{label}</span>
       {badge ? (
-        <Badge variant="secondary" className="max-w-48 shrink-0 truncate font-mono font-normal">
+        <Badge variant="secondary" className="max-w-48 justify-self-start truncate font-mono font-normal">
           {text}
         </Badge>
       ) : (
-        <span className="min-w-0 max-w-72 truncate font-mono text-foreground" title={text}>
+        <span className="min-w-0 truncate font-mono text-foreground" title={text}>
           {text}
         </span>
       )}
@@ -315,7 +319,7 @@ function CompactItem({ label, value, badge }: { label: string; value: string; ba
           {copied ? <Check className="size-3 text-primary" /> : <Copy className="size-3" />}
         </Button>
       )}
-    </span>
+    </div>
   );
 }
 
@@ -328,6 +332,8 @@ export function RecordsTab({
   page,
   onPageChange,
   pageSize,
+  onPageSizeChange,
+  pageSizeOptions,
   pricing,
 }: RecordsTabProps) {
   const { t } = useI18n();
@@ -538,6 +544,25 @@ export function RecordsTab({
               {t("records.pagination.summary", { page, pages: totalPages, size: pageSize })}
             </span>
             <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span>{t("records.pagination.page_size")}</span>
+                <Select
+                  items={pageSizeOptions.map((size) => ({ value: String(size), label: String(size) }))}
+                  value={String(pageSize)}
+                  onValueChange={(value) => value && onPageSizeChange(Number(value))}
+                >
+                  <SelectTrigger size="sm" className="w-18" aria-label={t("records.pagination.page_size")}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {pageSizeOptions.map((size) => (
+                      <SelectItem key={size} value={String(size)}>
+                        {size}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <span>{t("records.pagination.jump")}</span>
                 <Input

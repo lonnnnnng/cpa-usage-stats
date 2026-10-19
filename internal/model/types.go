@@ -266,3 +266,19 @@ type OptionsResponse struct {
 	APIKeys   []string `json:"api_keys"`
 	Auths     []string `json:"auths"`
 }
+
+// StorageStats reports database file usage for the dashboard's storage tab.
+// ReclaimableBytes is the space held by free pages and WAL data; VACUUM and a
+// WAL truncate checkpoint release it.
+type StorageStats struct {
+	DBPath           string `json:"db_path"`
+	DBSizeBytes      int64  `json:"db_size_bytes"`
+	WALSizeBytes     int64  `json:"wal_size_bytes"`
+	SHMSizeBytes     int64  `json:"shm_size_bytes"`
+	TotalSizeBytes   int64  `json:"total_size_bytes"`
+	RecordCount      int64  `json:"record_count"`
+	OldestRecordAt   string `json:"oldest_record_at,omitempty"`
+	NewestRecordAt   string `json:"newest_record_at,omitempty"`
+	ReclaimableBytes int64  `json:"reclaimable_bytes"`
+	RetentionDays    int    `json:"retention_days"`
+}

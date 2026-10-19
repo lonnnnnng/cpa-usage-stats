@@ -122,7 +122,7 @@ var configFields = []configFieldInfo{
 	{Name: "retention_days", Type: "integer", Description: "数据保留天数，0 为永久保存 (默认 90)"},
 	{Name: "exclude_models", Type: "array", Description: "不记录的模型或别名列表"},
 	{Name: "dashboard_path", Type: "string", Description: "看板资源路径 (默认 /dashboard)"},
-	{Name: "dashboard_title", Type: "string", Description: "管理中心菜单名称 (默认 用量统计看板)"},
+	{Name: "dashboard_title", Type: "string", Description: "管理中心菜单名称 (默认 用量统计)"},
 }
 
 func (p *Instance) handleRegister(payload []byte) ([]byte, error) {
@@ -221,6 +221,8 @@ func (p *Instance) handleManagementRegister() ([]byte, error) {
 			{Method: http.MethodGet, Path: handler.APIBasePath + "/records", Description: "调用明细分页"},
 			{Method: http.MethodGet, Path: handler.APIBasePath + "/options", Description: "筛选下拉选项"},
 			{Method: http.MethodGet, Path: handler.APIBasePath + "/stats", Description: "运行时计数（丢弃记录、队列压力）"},
+			{Method: http.MethodGet, Path: handler.APIBasePath + "/storage", Description: "数据库空间占用"},
+			{Method: http.MethodPost, Path: handler.APIBasePath + "/storage/reclaim", Description: "回收数据库空间"},
 		},
 	})
 }
@@ -245,7 +247,7 @@ func (p *Instance) handleManagementHandle(payload []byte) ([]byte, error) {
 
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	return okEnvelope(handler.Handle(p.store, p.htmlContent, req))
+	return okEnvelope(handler.Handle(p.store, p.htmlContent, req, p.cfg.RetentionDays))
 }
 
 func (p *Instance) handleShutdown() {

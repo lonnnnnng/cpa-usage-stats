@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -105,8 +106,9 @@ func serializeFailureHeaders(failed bool, headers http.Header) string {
 
 // Storage handles SQLite persistent storage.
 type Storage struct {
-	db *sql.DB
-	mu sync.RWMutex
+	db     *sql.DB
+	dbPath string
+	mu     sync.RWMutex
 }
 
 // New creates and initializes a SQLite storage instance.
@@ -124,7 +126,7 @@ func New(dbPath string) (*Storage, error) {
 	db.SetMaxIdleConns(1)
 	db.SetConnMaxLifetime(0)
 
-	s := &Storage{db: db}
+	s := &Storage{db: db, dbPath: dbPath}
 	if err := s.ensureSchema(); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("init sqlite schema: %w", err)
@@ -823,6 +825,76 @@ func (s *Storage) GetOptions() (*model.OptionsResponse, error) {
 		return nil, fmt.Errorf("query auth options: %w", err)
 	}
 	return resp, nil
+}
+
+// Stats reports file sizes, record counts and reclaimable space. File sizes
+// include the WAL and shared-memory sidecars; free pages are what VACUUM can
+// return to the filesystem.
+func (s *Storage) Stats(retentionDays int) (*model.StorageStats, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var pageCount, freePages, pageSize int64
+	if err := s.db.QueryRow("PRAGMA page_count").Scan(&pageCount); err != nil {
+		return nil, fmt.Errorf("read page_count: %w", err)
+	}
+	if err := s.db.QueryRow("PRAGMA freelist_count").Scan(&freePages); err != nil {
+		return nil, fmt.Errorf("read freelist_count: %w", err)
+	}
+	if err := s.db.QueryRow("PRAGMA page_size").Scan(&pageSize); err != nil {
+		return nil, fmt.Errorf("read page_size: %w", err)
+	}
+
+	var recordCount int64
+	var oldest, newest sql.NullString
+	if err := s.db.QueryRow(
+		"SELECT COUNT(*), MIN(requested_at), MAX(requested_at) FROM usage_records",
+	).Scan(&recordCount, &oldest, &newest); err != nil {
+		return nil, fmt.Errorf("query storage totals: %w", err)
+	}
+
+	dbSize := fileSize(s.dbPath)
+	walSize := fileSize(s.dbPath + "-wal")
+	shmSize := fileSize(s.dbPath + "-shm")
+
+	return &model.StorageStats{
+		DBPath:           s.dbPath,
+		DBSizeBytes:      dbSize,
+		WALSizeBytes:     walSize,
+		SHMSizeBytes:     shmSize,
+		TotalSizeBytes:   dbSize + walSize + shmSize,
+		RecordCount:      recordCount,
+		OldestRecordAt:   oldest.String,
+		NewestRecordAt:   newest.String,
+		ReclaimableBytes: freePages * pageSize,
+		RetentionDays:    retentionDays,
+	}, nil
+}
+
+// Vacuum rebuilds the database file and truncates the WAL, releasing pages
+// left behind by deleted records. It blocks writes for the duration.
+func (s *Storage) Vacuum() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, err := s.db.Exec("PRAGMA wal_checkpoint(TRUNCATE)"); err != nil {
+		return fmt.Errorf("checkpoint before vacuum: %w", err)
+	}
+	if _, err := s.db.Exec("VACUUM"); err != nil {
+		return fmt.Errorf("vacuum: %w", err)
+	}
+	if _, err := s.db.Exec("PRAGMA wal_checkpoint(TRUNCATE)"); err != nil {
+		return fmt.Errorf("checkpoint after vacuum: %w", err)
+	}
+	return nil
+}
+
+func fileSize(path string) int64 {
+	info, err := os.Stat(path)
+	if err != nil {
+		return 0
+	}
+	return info.Size()
 }
 
 // CleanRetention removes records older than retentionDays.

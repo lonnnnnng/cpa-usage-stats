@@ -54,7 +54,8 @@
     "tabs": {
       "overview": "用量总览",
       "usage": "用量分布",
-      "records": "调用明细"
+      "records": "调用明细",
+      "storage": "空间占用"
     },
     "load_failed": "数据加载失败：{{message}}",
     "empty": {
@@ -130,11 +131,7 @@
     },
     "kpi.p95": "P95 {{value}}",
     "models.unmatched_title": "未匹配定价的模型",
-    "models.unmatched_desc": "共 {{count}} 个，未匹配价格的模型不参与费用统计，可点击设置单价",
-    "provider_other": "其它",
-    "provider_other_empty": "暂无渠道用量",
-    "provider_share": "占比",
-    "provider_title": "Provider 渠道分布"
+    "models.unmatched_desc": "共 {{count}} 个，未匹配价格的模型不参与费用统计，可点击设置单价"
   },
   "pricing": {
     "source": "价格数据源",
@@ -242,8 +239,35 @@
       "next": "下一页",
       "last": "末页",
       "jump": "跳至",
-      "page_unit": "页"
+      "page_unit": "页",
+      "page_size": "每页条数"
     }
+  },
+  "storage": {
+    "title": "空间占用",
+    "desc": "SQLite 数据库与记录占用的磁盘空间。",
+    "total_size": "合计占用",
+    "db_size": "数据库文件",
+    "wal_size": "WAL 日志",
+    "shm_size": "共享内存 {{size}}",
+    "records": "记录数",
+    "path": "数据库路径",
+    "retention": "保留策略",
+    "retention_value": "{{days}} 天",
+    "retention_forever": "永久保存",
+    "oldest": "最早记录",
+    "newest": "最新记录",
+    "reclaimable": "可回收空间",
+    "retention_hint": "过期记录由后台每 12 小时清理一次，保留天数通过插件配置 retention_days 调整。",
+    "reclaimable_hint": "SQLite 删除记录后不会立即缩小文件；回收会对数据库执行 VACUUM 并截断 WAL。",
+    "reclaim": "回收空间",
+    "reclaim_title": "回收数据库空间？",
+    "reclaim_desc": "将执行 VACUUM 重建数据库文件，期间会短暂占用额外磁盘空间并阻塞写入；已记录的数据不会丢失。记录较多时可能需要数秒到数分钟。",
+    "reclaim_confirm": "开始回收",
+    "reclaiming": "回收中...",
+    "reclaimed": "已回收 {{size}}",
+    "reclaim_failed": "回收失败：{{message}}",
+    "load_failed": "空间信息加载失败：{{message}}"
   },
   "auth": {
     "title": "需要管理密钥",

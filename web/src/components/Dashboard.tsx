@@ -8,12 +8,12 @@ import { Logo } from "@/components/logo";
 import { OverviewSummary, OverviewUsage } from "@/components/OverviewTab";
 import { PricingSource } from "@/components/PricingSource";
 import { RecordsTab } from "@/components/RecordsTab";
+import { StorageTab } from "@/components/StorageTab";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useFormat } from "@/hooks/use-format";
 import { useManagementKey } from "@/hooks/use-management-key";
@@ -24,9 +24,9 @@ import { cn } from "@/lib/utils";
 import type { OptionsResponse, RecordListResponse, RecordsFilters, SummaryData, TimeRange } from "@/types";
 
 /** 概览拆成多页签后的页签值；@/types 里的 TabKey 只有 overview/records 两态，已不适用 */
-type TabKey = "overview" | "usage" | "records";
+type TabKey = "overview" | "usage" | "records" | "storage";
 
-const PAGE_SIZE = 15;
+const PAGE_SIZE_OPTIONS = [15, 30, 50, 100];
 
 const RANGE_OPTIONS: TimeRange[] = ["today", "yesterday", "7d", "30d", "all"];
 
@@ -63,13 +63,14 @@ export function Dashboard() {
   const [range, setRange] = useState<TimeRange>("today");
   const [filters, setFilters] = useState<RecordsFilters>(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
   const [autoRefresh, setAutoRefresh] = useState("0");
   const [keyDialogOpen, setKeyDialogOpen] = useState(false);
   // 输入密钥后先保持弹窗，等这一轮请求成功再自动关闭，失败则原地显示错误
   const [savingKey, setSavingKey] = useState(false);
 
   const query = useQuery<LoadResult>({
-    queryKey: ["usage", keyFingerprint(key), range, filters, page],
+    queryKey: ["usage", keyFingerprint(key), range, filters, page, pageSize],
     enabled: Boolean(key),
     retry: (count, error) => !(error instanceof UnauthorizedError) && count < 2,
     placeholderData: keepPreviousData,
@@ -80,7 +81,7 @@ export function Dashboard() {
       const shared = { ...filters, range, failed };
       const [summary, records] = await Promise.all([
         fetchSummary(key, shared),
-        fetchRecords(key, shared, page, PAGE_SIZE),
+        fetchRecords(key, shared, page, pageSize),
       ]);
       return { summary, records, options };
     },
@@ -120,30 +121,24 @@ export function Dashboard() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <ToggleGroup
-            value={[range]}
+          {/* 与主内容页签共用同一套 Tabs 样式，避免两处页签观感不一致 */}
+          <Tabs
+            value={range}
             onValueChange={(value) => {
-              const next = value[0] as TimeRange | undefined;
-              if (!next) return;
-              setRange(next);
+              if (!value) return;
+              setRange(value as TimeRange);
               setPage(1);
             }}
-            aria-label={t("dashboard.range.label")}
-            className="max-w-full flex-wrap bg-muted/60 p-0.75"
+            className="shrink-0 gap-0"
           >
-            {RANGE_OPTIONS.map((value) => (
-              <ToggleGroupItem
-                key={value}
-                value={value}
-                size="sm"
-                // 轨道是 muted/60：未选中 hover 走基础样式的 bg-muted，
-                // 选中态必须用 ! 压过基础样式的 aria-pressed:bg-muted（同特异性、排序在后）
-                className="text-muted-foreground aria-pressed:bg-background! aria-pressed:text-foreground aria-pressed:shadow-sm"
-              >
-                {t(`dashboard.range.${value}`)}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
+            <TabsList aria-label={t("dashboard.range.label")}>
+              {RANGE_OPTIONS.map((value) => (
+                <TabsTrigger key={value} value={value} className="h-6.5">
+                  {t(`dashboard.range.${value}`)}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
 
           <Select
             items={REFRESH_OPTIONS.map((option) => ({ value: option.value, label: t(option.labelKey) }))}
@@ -243,7 +238,7 @@ export function Dashboard() {
       <Tabs value={tab} onValueChange={(value) => setTab(value as TabKey)}>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           {/*
-            窄屏下 5 个页签放不进一行：让列表换行（h-auto 覆盖基础样式的固定 h-8），
+            窄屏下 4 个页签放不进一行：让列表换行（h-auto 覆盖基础样式的固定 h-8），
             并给触发器一个确定高度，替代依赖父级高度的 h-[calc(100%-1px)]。
           */}
           <TabsList className="flex-wrap group-data-horizontal/tabs:h-auto">
@@ -255,6 +250,9 @@ export function Dashboard() {
             </TabsTrigger>
             <TabsTrigger value="records" className="h-6.5">
               {t("dashboard.tabs.records")}
+            </TabsTrigger>
+            <TabsTrigger value="storage" className="h-6.5">
+              {t("dashboard.tabs.storage")}
             </TabsTrigger>
           </TabsList>
           <PricingSource pricing={pricing} />
@@ -271,11 +269,7 @@ export function Dashboard() {
           <OverviewSummary summary={summary} loading={loading} pricing={pricing} />
         </TabsContent>
 
-        {/*
-          这三个页签的内容没有卡片外框（表格直接铺在页面上），
-          TabsContent 基类没有上下内边距，默认只剩 Tabs 根的 gap-2，和页签栏贴得太近。
-        */}
-        <TabsContent value="usage" className="pt-4">
+        <TabsContent value="usage">
           <OverviewUsage summary={summary} loading={loading} pricing={pricing} />
         </TabsContent>
 
@@ -291,9 +285,18 @@ export function Dashboard() {
             }}
             page={page}
             onPageChange={setPage}
-            pageSize={PAGE_SIZE}
+            pageSize={pageSize}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              setPage(1);
+            }}
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
             pricing={pricing}
           />
+        </TabsContent>
+
+        <TabsContent value="storage">
+          <StorageTab apiKey={key} />
         </TabsContent>
       </Tabs>
 

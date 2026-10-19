@@ -122,6 +122,20 @@ export interface OptionsResponse {
   auths: string[];
 }
 
+/** Database file usage reported by the storage endpoint. */
+export interface StorageStats {
+  db_path: string;
+  db_size_bytes: number;
+  wal_size_bytes: number;
+  shm_size_bytes: number;
+  total_size_bytes: number;
+  record_count: number;
+  oldest_record_at?: string;
+  newest_record_at?: string;
+  reclaimable_bytes: number;
+  retention_days: number;
+}
+
 /** Runtime counters that live outside the database. */
 export interface RuntimeStats {
   dropped_records: number;

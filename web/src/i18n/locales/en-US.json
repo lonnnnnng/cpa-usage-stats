@@ -54,7 +54,8 @@
     "tabs": {
       "overview": "Overview",
       "usage": "Usage",
-      "records": "Records"
+      "records": "Records",
+      "storage": "Storage"
     },
     "load_failed": "Failed to load data: {{message}}",
     "empty": {
@@ -130,11 +131,7 @@
     },
     "kpi.p95": "P95 {{value}}",
     "models.unmatched_title": "Models without pricing",
-    "models.unmatched_desc": "{{count}} models have no matched price and are excluded from cost; click one to set a unit price",
-    "provider_other": "Other",
-    "provider_other_empty": "No provider usage",
-    "provider_share": "Share",
-    "provider_title": "Provider distribution"
+    "models.unmatched_desc": "{{count}} models have no matched price and are excluded from cost; click one to set a unit price"
   },
   "pricing": {
     "source": "Pricing source",
@@ -242,8 +239,35 @@
       "next": "Next",
       "last": "Last",
       "jump": "Go to",
-      "page_unit": "page"
+      "page_unit": "page",
+      "page_size": "Rows per page"
     }
+  },
+  "storage": {
+    "title": "Storage",
+    "desc": "Disk space used by the SQLite database and its records.",
+    "total_size": "Total",
+    "db_size": "Database file",
+    "wal_size": "WAL",
+    "shm_size": "Shared memory {{size}}",
+    "records": "Records",
+    "path": "Database path",
+    "retention": "Retention",
+    "retention_value": "{{days}} days",
+    "retention_forever": "Keep forever",
+    "oldest": "Oldest record",
+    "newest": "Newest record",
+    "reclaimable": "Reclaimable",
+    "retention_hint": "Expired records are purged by a background job every 12 hours; adjust the retention via the retention_days plugin option.",
+    "reclaimable_hint": "SQLite does not shrink the file after deletes. Reclaiming runs VACUUM and truncates the WAL.",
+    "reclaim": "Reclaim space",
+    "reclaim_title": "Reclaim database space?",
+    "reclaim_desc": "VACUUM rebuilds the database file. It temporarily needs extra disk space and blocks writes, but no recorded data is lost. A large database may take seconds to minutes.",
+    "reclaim_confirm": "Start reclaiming",
+    "reclaiming": "Reclaiming...",
+    "reclaimed": "Reclaimed {{size}}",
+    "reclaim_failed": "Failed to reclaim space: {{message}}",
+    "load_failed": "Failed to load storage info: {{message}}"
   },
   "auth": {
     "title": "Management key required",

@@ -26,7 +26,8 @@ function shortLabel(dimension: UsageDimension, stat: GroupStat): string {
   if (dimension === "key") text = maskApiKey(raw);
   else if (dimension === "auth") text = displayAuthName(raw);
   if (dimension === "auth" && stat.secondary) text = `${text} #${stat.secondary}`;
-  return text.length > 18 ? `${text.slice(0, 17)}…` : text;
+  // 纵向直方图的分类标签空间更窄，截得更短，完整值由 tooltip 展示
+  return text.length > 12 ? `${text.slice(0, 11)}…` : text;
 }
 
 function fullLabel(dimension: UsageDimension, stat: GroupStat): string {
@@ -34,6 +35,11 @@ function fullLabel(dimension: UsageDimension, stat: GroupStat): string {
   if (dimension === "auth" && stat.secondary) return `${raw} #${stat.secondary}`;
   return raw;
 }
+
+/** 会话数量可能非常多，只看当前指标下排名前几的会话。 */
+const DIMENSION_LIMITS: Partial<Record<UsageDimension, number>> = {
+  session: 5,
+};
 
 /** GroupStat 转直方图行；速度与延迟为 0 时显示为无数据而不是 0。 */
 export function toUsageRows(
@@ -84,14 +90,13 @@ export function DimensionUsageChart({ stats, pricingTable, dimensions, defaultDi
   const rows = toUsageRows(dimension, active, pricingTable);
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      <div className="flex shrink-0 flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
         <Tabs value={dimension} onValueChange={(value) => value && setDimension(value as UsageDimension)}>
           <TabsList className="h-auto flex-wrap">
             {dimensions.map((item) => (
               <TabsTrigger key={item} value={item} className="h-6.5 px-2.5 text-xs">
                 {t(DIMENSION_LABEL_KEY[item] as never)}
-                <span className="ml-1 font-mono text-[10px] text-muted-foreground">{(stats[item] ?? []).length}</span>
               </TabsTrigger>
             ))}
           </TabsList>
@@ -106,7 +111,13 @@ export function DimensionUsageChart({ stats, pricingTable, dimensions, defaultDi
           </TabsList>
         </Tabs>
       </div>
-      <UsageBarChart rows={rows} metric={metric} pricingReady={Boolean(pricingTable)} />
+      <UsageBarChart
+        rows={rows}
+        metric={metric}
+        limit={DIMENSION_LIMITS[dimension]}
+        pricingReady={Boolean(pricingTable)}
+        className="flex-1"
+      />
     </div>
   );
 }

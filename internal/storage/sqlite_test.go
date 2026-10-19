@@ -114,6 +114,48 @@ func TestStorageSummaryRecordsAndRetention(t *testing.T) {
 	}
 }
 
+func TestStorageStatsAndVacuum(t *testing.T) {
+	store, err := New(filepath.Join(t.TempDir(), "usage.db"))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer store.Close()
+
+	stats, err := store.Stats(90)
+	if err != nil {
+		t.Fatalf("Stats: %v", err)
+	}
+	if stats.RecordCount != 0 || stats.RetentionDays != 90 || stats.DBSizeBytes <= 0 {
+		t.Fatalf("empty stats = %+v", stats)
+	}
+
+	now := time.Now()
+	if err := store.InsertBatch([]model.UsageRecord{{RequestID: "req-1", Model: "gpt-5", RequestedAt: now}}); err != nil {
+		t.Fatalf("InsertBatch: %v", err)
+	}
+	stats, err = store.Stats(30)
+	if err != nil {
+		t.Fatalf("Stats after insert: %v", err)
+	}
+	if stats.RecordCount != 1 || stats.OldestRecordAt == "" || stats.NewestRecordAt == "" {
+		t.Fatalf("stats after insert = %+v", stats)
+	}
+	if stats.TotalSizeBytes < stats.DBSizeBytes {
+		t.Fatalf("total size %d < db size %d", stats.TotalSizeBytes, stats.DBSizeBytes)
+	}
+
+	if err := store.Vacuum(); err != nil {
+		t.Fatalf("Vacuum: %v", err)
+	}
+	after, err := store.Stats(30)
+	if err != nil {
+		t.Fatalf("Stats after vacuum: %v", err)
+	}
+	if after.RecordCount != 1 {
+		t.Fatalf("record count after vacuum = %d, want 1", after.RecordCount)
+	}
+}
+
 // TestLegacySchemaUpgraded verifies that a database created by an older plugin
 // keeps its rows and has the missing columns added on open, instead of being
 // dropped and rebuilt.

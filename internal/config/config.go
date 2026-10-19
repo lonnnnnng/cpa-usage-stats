@@ -32,7 +32,7 @@ func DefaultConfig() Config {
 		ChannelSize:     10000,
 		RetentionDays:   90,
 		DashboardPath:   "/dashboard",
-		DashboardTitle:  "用量统计看板",
+		DashboardTitle:  "用量统计",
 	}
 }
 

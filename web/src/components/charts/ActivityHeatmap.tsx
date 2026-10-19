@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useFormat } from "@/hooks/use-format";
 import { useI18n } from "@/i18n/context";
@@ -9,7 +10,8 @@ import type { SummaryData } from "@/types";
 export type HeatmapMetric = "tokens" | "requests" | "cost";
 
 const METRICS: HeatmapMetric[] = ["tokens", "requests", "cost"];
-const WEEKS = 26;
+// 一年 52 周，按容器宽度等分列，避免宽屏下整块只挤在左侧
+const WEEKS = 52;
 const DAYS = 7;
 const DAY_MS = 86_400_000;
 
@@ -162,24 +164,15 @@ export function ActivityHeatmap({
             days: formatNumber(WEEKS * DAYS),
           })}
         </span>
-        <div className="flex flex-wrap items-center gap-1.5">
-          {METRICS.map((item) => (
-            <button
-              key={item}
-              type="button"
-              aria-pressed={metric === item}
-              onClick={() => setMetric(item)}
-              className={cn(
-                "rounded-md px-2 py-0.5 text-xs transition-colors",
-                metric === item
-                  ? "bg-secondary text-secondary-foreground"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
-              )}
-            >
-              {t(`heatmap.metric_${item}` as never)}
-            </button>
-          ))}
-        </div>
+        <Tabs value={metric} onValueChange={(value) => value && setMetric(value as HeatmapMetric)}>
+          <TabsList className="h-7">
+            {METRICS.map((item) => (
+              <TabsTrigger key={item} value={item} className="px-2 text-xs">
+                {t(`heatmap.metric_${item}` as never)}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
       </div>
 
       {!hasData ? (
@@ -188,7 +181,7 @@ export function ActivityHeatmap({
         </div>
       ) : (
         <div className="space-y-1.5 overflow-x-auto">
-          <div className="flex gap-1.5">
+          <div className="flex min-w-160 gap-1.5">
             <div className="flex w-6 shrink-0 flex-col gap-1 pt-4">
               {weekdayLabels.map((label) => (
                 <span key={label.key} className="h-3 text-[9px] leading-3 text-muted-foreground">
@@ -196,11 +189,11 @@ export function ActivityHeatmap({
                 </span>
               ))}
             </div>
-            <div className="flex gap-1">
+            <div className="grid flex-1 gap-1" style={{ gridTemplateColumns: `repeat(${WEEKS}, minmax(0, 1fr))` }}>
               {weeks.map((column, weekIndex) => {
                 const label = monthLabels.find((item) => item.index === weekIndex);
                 return (
-                  <div key={column[0].key} className="flex flex-col gap-1">
+                  <div key={column[0].key} className="flex min-w-0 flex-col gap-1">
                     <span className="h-3 text-[9px] leading-3 whitespace-nowrap text-muted-foreground">
                       {label?.text ?? ""}
                     </span>
@@ -210,7 +203,7 @@ export function ActivityHeatmap({
                           render={
                             <span
                               className={cn(
-                                "size-3 rounded-xs transition-colors hover:ring-1 hover:ring-ring",
+                                "aspect-square w-full rounded-xs transition-colors hover:ring-1 hover:ring-ring",
                                 LEVEL_CLASS[cell.level],
                               )}
                             />

@@ -67,7 +67,7 @@ plugins:
       retention_days: 90                          # retention in days; 0 keeps data forever
       exclude_models: []                          # models or aliases that should not be recorded
       dashboard_path: "/dashboard"                # dashboard resource path
-      dashboard_title: "Usage Dashboard"          # Management Center menu label
+      dashboard_title: "Usage Stats"              # Management Center menu label
 ```
 
 ### Local packaging
@@ -80,7 +80,7 @@ Artifacts are written to `release-dist/` with platform archives and `checksums.t
 
 ### Usage
 
-Open `Usage Dashboard` from the Management Center plugin list, or visit:
+Open `Usage Stats` from the Management Center plugin list, or visit:
 
 ```text
 http://127.0.0.1:8317/v0/resource/plugins/cpa-usage-stats/dashboard

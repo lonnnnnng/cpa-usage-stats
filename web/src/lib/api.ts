@@ -1,5 +1,5 @@
 import { resolveApiBase } from "@/lib/auth";
-import type { OptionsResponse, RecordListResponse, RuntimeStats, SummaryData } from "@/types";
+import type { OptionsResponse, RecordListResponse, RuntimeStats, StorageStats, SummaryData } from "@/types";
 
 const API_BASE = "/v0/management/plugins/cpa-usage-stats";
 
@@ -22,13 +22,14 @@ interface ApiFilters {
   keyword?: string;
 }
 
-async function request<T>(key: string, path: string, params: Record<string, string>): Promise<T> {
+async function request<T>(key: string, path: string, params: Record<string, string>, method = "GET"): Promise<T> {
   // 没有密钥就不发请求：CPA 会把无鉴权请求计入认证失败次数，连续 5 次会封禁该 IP
   if (!key) throw new UnauthorizedError();
 
   const query = new URLSearchParams(Object.entries(params).filter(([, value]) => value !== ""));
   const suffix = query.toString() ? `?${query}` : "";
   const res = await fetch(`${resolveApiBase()}${API_BASE}${path}${suffix}`, {
+    method,
     headers: { Authorization: `Bearer ${key}` },
   });
 
@@ -82,6 +83,15 @@ export function fetchOptions(key: string): Promise<OptionsResponse> {
 
 export function fetchStats(key: string): Promise<RuntimeStats> {
   return request<RuntimeStats>(key, "/stats", {});
+}
+
+export function fetchStorage(key: string): Promise<StorageStats> {
+  return request<StorageStats>(key, "/storage", {});
+}
+
+/** 执行 VACUUM 回收空闲页，返回回收后的最新占用。 */
+export function reclaimStorage(key: string): Promise<StorageStats> {
+  return request<StorageStats>(key, "/storage/reclaim", {}, "POST");
 }
 
 /**

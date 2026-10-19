@@ -75,7 +75,7 @@ export function TrendChart({ points, hourly, view, className }: TrendChartProps)
 
   if (data.length === 0) {
     return (
-      <div className={cn("flex h-64 items-center justify-center text-xs text-muted-foreground", className)}>
+      <div className={cn("flex h-64 w-full items-center justify-center text-xs text-muted-foreground", className)}>
         {t("overview.trend.empty")}
       </div>
     );
@@ -84,7 +84,7 @@ export function TrendChart({ points, hourly, view, className }: TrendChartProps)
   const formatValue = view === "requests" ? formatNumber : formatTokens;
 
   return (
-    <div className={cn("space-y-1", className)}>
+    <div className={cn("w-full min-w-0 space-y-1", className)}>
       <ChartContainer config={config} className="aspect-auto h-64 w-full">
         <LineChart data={data} margin={{ left: 4, right: 4, top: 8, bottom: 0 }}>
           <CartesianGrid vertical={false} strokeDasharray="3 3" />

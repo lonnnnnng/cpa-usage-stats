@@ -91,21 +91,23 @@ interface UsageBarChartProps {
   metric: UsageMetric;
   /** 成本受定价表影响，未就绪时该指标不可用 */
   pricingReady?: boolean;
+  /** 覆盖默认展示条数，会话等基数大的维度只取前几 */
+  limit?: number;
   className?: string;
 }
 
 /**
  * 纵向直方图：同一份聚合数据按指标切换展示，排序后取前 N 项。
- * 横向排布是为了让模型名、账号这类长文本有稳定的横轴标签位置。
+ * 分类轴放在底部，长标签斜排避免重叠。
  */
-export function UsageBarChart({ rows, metric, pricingReady = true, className }: UsageBarChartProps) {
+export function UsageBarChart({ rows, metric, pricingReady = true, limit, className }: UsageBarChartProps) {
   const { t } = useI18n();
   const { formatNumber, formatTokens, formatCost } = useFormat();
 
   const ranked = rows
     .filter((row) => metricValue(row, metric) > 0)
     .sort((a, b) => metricValue(b, metric) - metricValue(a, metric))
-    .slice(0, VISIBLE_BARS)
+    .slice(0, limit ?? VISIBLE_BARS)
     .map((row, index) => ({ ...row, fill: barColor(index) }));
 
   if (ranked.length === 0) {
@@ -133,81 +135,91 @@ export function UsageBarChart({ rows, metric, pricingReady = true, className }: 
   };
 
   return (
-    <div className={cn("h-72 w-full", className)}>
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart layout="vertical" data={ranked} margin={{ top: 0, right: 24, left: 0, bottom: 0 }}>
-          <CartesianGrid horizontal={false} strokeDasharray="3 3" className="stroke-muted/40" />
-          <XAxis
-            type="number"
-            tickFormatter={formatTick}
-            className="fill-muted-foreground font-mono text-[10px]"
-            tickLine={false}
-            axisLine={false}
-          />
-          <YAxis
-            type="category"
-            dataKey="label"
-            width={148}
-            tickLine={false}
-            axisLine={false}
-            className="fill-muted-foreground font-mono text-[11px]"
-          />
-          <Tooltip
-            cursor={{ fill: "var(--muted)", opacity: 0.3 }}
-            content={({ active, payload }) => {
-              if (!active || !payload?.length) return null;
-              const row = payload[0].payload as UsageRow & { fill: string };
-              return (
-                <div className="max-w-xs space-y-1 rounded-lg border bg-popover p-2 text-xs text-popover-foreground shadow-md">
-                  <div className="flex items-center gap-1.5 font-mono font-semibold text-foreground">
-                    <span className="size-2 shrink-0 rounded-full" style={{ background: row.fill }} />
-                    <span className="break-all">{row.fullName}</span>
+    <div className={cn("relative min-h-64 w-full", className)}>
+      {/* 父级高度来自 flex 分配，百分比高度无法直接解析；用绝对定位拿到确定高度 */}
+      <div className="absolute inset-0">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={ranked} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+            <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-muted/40" />
+            <XAxis
+              type="category"
+              dataKey="label"
+              interval={0}
+              angle={-30}
+              textAnchor="end"
+              height={64}
+              tickMargin={8}
+              tickLine={false}
+              axisLine={false}
+              className="fill-muted-foreground font-mono text-[10px]"
+            />
+            <YAxis
+              type="number"
+              width={48}
+              tickFormatter={formatTick}
+              tickLine={false}
+              axisLine={false}
+              className="fill-muted-foreground font-mono text-[10px]"
+            />
+            <Tooltip
+              cursor={{ fill: "var(--muted)", opacity: 0.3 }}
+              content={({ active, payload }) => {
+                if (!active || !payload?.length) return null;
+                const row = payload[0].payload as UsageRow & { fill: string };
+                return (
+                  <div className="max-w-xs space-y-1 rounded-lg border bg-popover p-2 text-xs text-popover-foreground shadow-md">
+                    <div className="flex items-center gap-1.5 font-mono font-semibold text-foreground">
+                      <span className="size-2 shrink-0 rounded-full" style={{ background: row.fill }} />
+                      <span className="break-all">{row.fullName}</span>
+                    </div>
+                    {row.hint && <div className="text-[11px] text-muted-foreground">{row.hint}</div>}
+                    <div className="space-y-0.5 border-t pt-1 font-mono text-[11px] tabular-nums">
+                      <div className="flex justify-between gap-4">
+                        <span className="text-muted-foreground">{t("usage_chart.metric_label")}:</span>
+                        <span className="font-semibold">{formatMetric(metricValue(row, metric))}</span>
+                      </div>
+                      <div className="flex justify-between gap-4">
+                        <span className="text-muted-foreground">{t("usage_chart.metric_tokens")}:</span>
+                        <span>{formatTokens(row.tokens)}</span>
+                      </div>
+                      <div className="flex justify-between gap-4">
+                        <span className="text-muted-foreground">{t("usage_chart.metric_requests")}:</span>
+                        <span>
+                          {formatNumber(row.requests)}
+                          {row.failed > 0 && (
+                            <span className="ml-1 text-destructive">({formatNumber(row.failed)})</span>
+                          )}
+                        </span>
+                      </div>
+                      <div className="flex justify-between gap-4">
+                        <span className="text-muted-foreground">{t("usage_chart.metric_cost")}:</span>
+                        <span>{formatCost(row.cost)}</span>
+                      </div>
+                      <div className="flex justify-between gap-4">
+                        <span className="text-muted-foreground">{t("usage_chart.metric_speed")}:</span>
+                        <span className={toneTextClass(speedTone(row.speed))}>
+                          {row.speed === null ? "-" : t("usage_chart.tps", { value: row.speed.toFixed(1) })}
+                        </span>
+                      </div>
+                      <div className="flex justify-between gap-4">
+                        <span className="text-muted-foreground">{t("usage_chart.metric_latency")}:</span>
+                        <span className={row.latency === null ? undefined : toneTextClass(latencyTone(row.latency))}>
+                          {row.latency === null ? "-" : formatDuration(row.latency)}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  {row.hint && <div className="text-[11px] text-muted-foreground">{row.hint}</div>}
-                  <div className="space-y-0.5 border-t pt-1 font-mono text-[11px] tabular-nums">
-                    <div className="flex justify-between gap-4">
-                      <span className="text-muted-foreground">{t("usage_chart.metric_label")}:</span>
-                      <span className="font-semibold">{formatMetric(metricValue(row, metric))}</span>
-                    </div>
-                    <div className="flex justify-between gap-4">
-                      <span className="text-muted-foreground">{t("usage_chart.metric_tokens")}:</span>
-                      <span>{formatTokens(row.tokens)}</span>
-                    </div>
-                    <div className="flex justify-between gap-4">
-                      <span className="text-muted-foreground">{t("usage_chart.metric_requests")}:</span>
-                      <span>
-                        {formatNumber(row.requests)}
-                        {row.failed > 0 && <span className="ml-1 text-destructive">({formatNumber(row.failed)})</span>}
-                      </span>
-                    </div>
-                    <div className="flex justify-between gap-4">
-                      <span className="text-muted-foreground">{t("usage_chart.metric_cost")}:</span>
-                      <span>{formatCost(row.cost)}</span>
-                    </div>
-                    <div className="flex justify-between gap-4">
-                      <span className="text-muted-foreground">{t("usage_chart.metric_speed")}:</span>
-                      <span className={toneTextClass(speedTone(row.speed))}>
-                        {row.speed === null ? "-" : t("usage_chart.tps", { value: row.speed.toFixed(1) })}
-                      </span>
-                    </div>
-                    <div className="flex justify-between gap-4">
-                      <span className="text-muted-foreground">{t("usage_chart.metric_latency")}:</span>
-                      <span className={row.latency === null ? undefined : toneTextClass(latencyTone(row.latency))}>
-                        {row.latency === null ? "-" : formatDuration(row.latency)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              );
-            }}
-          />
-          <Bar dataKey={(row: UsageRow) => metricValue(row, metric)} radius={[0, 4, 4, 0]} maxBarSize={18}>
-            {ranked.map((row) => (
-              <Cell key={row.key} fill={row.fill} />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
+                );
+              }}
+            />
+            <Bar dataKey={(row: UsageRow) => metricValue(row, metric)} radius={[4, 4, 0, 0]} maxBarSize={40}>
+              {ranked.map((row) => (
+                <Cell key={row.key} fill={row.fill} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 }

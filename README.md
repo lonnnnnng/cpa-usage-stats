@@ -7,7 +7,7 @@ CLIProxyAPI（CPA 8.0+）用量统计插件：通过 usage 插件接口采集请
 ## 项目简介
 
 - 采集请求、Token、延迟、失败等用量数据，按批异步写入 SQLite。
-- 内置看板：概览、模型、凭据、诊断和调用明细。
+- 内置看板：概览、用量分布、调用明细和空间占用。
 - 支持数据保留天数、模型排除、批量写入参数等配置。
 
 ## 开发环境配置
@@ -67,7 +67,7 @@ plugins:
       retention_days: 90                          # 历史保留天数，0 为永久
       exclude_models: []                          # 不记录的模型或别名
       dashboard_path: "/dashboard"                # 看板资源路径
-      dashboard_title: "用量统计看板"              # 管理中心菜单名称
+      dashboard_title: "用量统计"                  # 管理中心菜单名称
 ```
 
 ### 本地打包
@@ -80,7 +80,7 @@ plugins:
 
 ### 使用
 
-在管理中心插件列表点击「用量统计看板」，或直接访问：
+在管理中心插件列表点击「用量统计」，或直接访问：
 
 ```text
 http://127.0.0.1:8317/v0/resource/plugins/cpa-usage-stats/dashboard

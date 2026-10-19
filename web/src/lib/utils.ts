@@ -16,6 +16,19 @@ export function formatPercent(pct: number): string {
   return `${pct.toFixed(1)}%`;
 }
 
+/** 字节数按 1024 进制展示，用于数据库文件占用 */
+export function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit++;
+  }
+  return `${unit === 0 || value >= 100 ? value.toFixed(0) : value.toFixed(1)} ${units[unit]}`;
+}
+
 /** "2026-09-28 15:04:05.000" → "09-28 15:04:05" */
 export function formatDateTime(stored: string): string {
   if (!stored) return "-";

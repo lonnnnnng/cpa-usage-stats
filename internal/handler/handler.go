@@ -17,7 +17,7 @@ const APIBasePath = "/v0/management/plugins/cpa-usage-stats"
 // Handle serves plugin HTTP requests. Data is only returned on the
 // management routes, which the host protects with the management key; the
 // unauthenticated resource route only ever gets the dashboard HTML.
-func Handle(store *storage.Storage, html []byte, req model.ManagementRequest) model.ManagementResponse {
+func Handle(store *storage.Storage, html []byte, req model.ManagementRequest, retentionDays int) model.ManagementResponse {
 	if !strings.HasPrefix(req.Path, APIBasePath+"/") {
 		return htmlResponse(html)
 	}
@@ -49,6 +49,24 @@ func Handle(store *storage.Storage, html []byte, req model.ManagementRequest) mo
 		// Runtime counters that live outside the database (dropped records,
 		// queue pressure) so the dashboard can flag silent data loss.
 		return jsonOK(statsProvider())
+	case "/storage":
+		stats, err := store.Stats(retentionDays)
+		if err != nil {
+			return jsonError(http.StatusInternalServerError, "query_storage_failed", err.Error())
+		}
+		return jsonOK(stats)
+	case "/storage/reclaim":
+		if req.Method != http.MethodPost {
+			return jsonError(http.StatusMethodNotAllowed, "method_not_allowed", "use POST")
+		}
+		if err := store.Vacuum(); err != nil {
+			return jsonError(http.StatusInternalServerError, "reclaim_failed", err.Error())
+		}
+		stats, err := store.Stats(retentionDays)
+		if err != nil {
+			return jsonError(http.StatusInternalServerError, "query_storage_failed", err.Error())
+		}
+		return jsonOK(stats)
 	default:
 		return jsonError(http.StatusNotFound, "not_found", "unknown endpoint")
 	}
