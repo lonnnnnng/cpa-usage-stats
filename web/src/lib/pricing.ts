@@ -521,3 +521,19 @@ export function totalCost(table: PricingTable | null, groups: GroupStat[]): Cost
   }
   return { cost, priced, total: groups.length };
 }
+
+/**
+ * Blended cost per token across the priced groups. Trend buckets only carry
+ * token totals, so per-bucket cost is estimated by applying this rate.
+ */
+export function costPerToken(table: PricingTable | null, groups: GroupStat[]): number | null {
+  let cost = 0;
+  let tokens = 0;
+  for (const group of groups) {
+    const value = groupCost(table, group);
+    if (value === null || group.total_tokens <= 0) continue;
+    cost += value;
+    tokens += group.total_tokens;
+  }
+  return tokens > 0 ? cost / tokens : null;
+}

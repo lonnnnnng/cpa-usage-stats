@@ -1,6 +1,5 @@
 import { AlertCircle, Check, CheckCircle2, Copy, Layers, RotateCcw, Search } from "lucide-react";
 import { useEffect, useState } from "react";
-import { latencyTone, toneTextClass } from "@/components/charts/UsageBarChart";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,6 +21,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useFormat } from "@/hooks/use-format";
 import type { PricingState } from "@/hooks/use-pricing";
 import { useI18n } from "@/i18n/context";
+import { latencyTone, toneTextClass } from "@/lib/metrics";
 import { type RecordCost, recordCost } from "@/lib/pricing";
 import { cn, copyToClipboard, formatDateTime, formatDuration, maskApiKey } from "@/lib/utils";
 import type { OptionsResponse, RecordListResponse, RecordsFilters, StoredRecord } from "@/types";

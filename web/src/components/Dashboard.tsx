@@ -5,7 +5,7 @@ import { DisplaySettings } from "@/components/DisplaySettings";
 import { KeyDialog } from "@/components/KeyDialog";
 import { LanguageToggle } from "@/components/language-toggle";
 import { Logo } from "@/components/logo";
-import { OverviewSummary, OverviewUsage } from "@/components/OverviewTab";
+import { OverviewSummary } from "@/components/OverviewTab";
 import { PricingSource } from "@/components/PricingSource";
 import { RecordsTab } from "@/components/RecordsTab";
 import { StorageTab } from "@/components/StorageTab";
@@ -24,7 +24,7 @@ import { cn } from "@/lib/utils";
 import type { OptionsResponse, RecordListResponse, RecordsFilters, SummaryData, TimeRange } from "@/types";
 
 /** 概览拆成多页签后的页签值；@/types 里的 TabKey 只有 overview/records 两态，已不适用 */
-type TabKey = "overview" | "usage" | "records" | "storage";
+type TabKey = "overview" | "records" | "storage";
 
 const PAGE_SIZE_OPTIONS = [15, 30, 50, 100];
 
@@ -235,18 +235,15 @@ export function Dashboard() {
         </Alert>
       )}
 
-      <Tabs value={tab} onValueChange={(value) => setTab(value as TabKey)}>
+      <Tabs value={tab} onValueChange={(value) => setTab(value as TabKey)} className="gap-6">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           {/*
-            窄屏下 4 个页签放不进一行：让列表换行（h-auto 覆盖基础样式的固定 h-8），
+            窄屏下 3 个页签放不进一行：让列表换行（h-auto 覆盖基础样式的固定 h-8），
             并给触发器一个确定高度，替代依赖父级高度的 h-[calc(100%-1px)]。
           */}
           <TabsList className="flex-wrap group-data-horizontal/tabs:h-auto">
             <TabsTrigger value="overview" className="h-6.5">
               {t("dashboard.tabs.overview")}
-            </TabsTrigger>
-            <TabsTrigger value="usage" className="h-6.5">
-              {t("dashboard.tabs.usage")}
             </TabsTrigger>
             <TabsTrigger value="records" className="h-6.5">
               {t("dashboard.tabs.records")}
@@ -267,10 +264,6 @@ export function Dashboard() {
             </Alert>
           )}
           <OverviewSummary summary={summary} loading={loading} pricing={pricing} />
-        </TabsContent>
-
-        <TabsContent value="usage">
-          <OverviewUsage summary={summary} loading={loading} pricing={pricing} />
         </TabsContent>
 
         <TabsContent value="records">

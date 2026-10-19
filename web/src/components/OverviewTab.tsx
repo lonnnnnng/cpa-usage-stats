@@ -15,10 +15,9 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 import { CustomPriceModal } from "@/components/CustomPriceModal";
 import { ActivityHeatmap } from "@/components/charts/ActivityHeatmap";
-import { DimensionUsageChart } from "@/components/charts/DimensionUsageChart";
+import { DimensionBreakdown } from "@/components/charts/DimensionBreakdown";
 import { TokenBarChart } from "@/components/charts/TokenBarChart";
-import { TrendChart } from "@/components/charts/TrendChart";
-import { latencyTone, speedTone, toneTextClass } from "@/components/charts/UsageBarChart";
+import { UsageTimeChart } from "@/components/charts/UsageTimeChart";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,11 +26,19 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useFormat } from "@/hooks/use-format";
 import type { PricingState } from "@/hooks/use-pricing";
 import { useI18n } from "@/i18n/context";
+import {
+  DIMENSION_LABEL_KEY,
+  latencyTone,
+  speedTone,
+  toneTextClass,
+  USAGE_DIMENSIONS,
+  USAGE_METRICS,
+  type UsageDimension,
+  type UsageMetric,
+} from "@/lib/metrics";
 import { groupCostDetails, type ModelPrice, priceFor, totalCost } from "@/lib/pricing";
 import { formatDuration, formatPercent } from "@/lib/utils";
 import type { SummaryData } from "@/types";
-
-type TrendView = "requests" | "tokens";
 
 /** 概览拆成多个页签后，每块内容都吃同一份 summary，由 Dashboard 按页签分发。 */
 interface OverviewSectionProps {
@@ -78,11 +85,12 @@ function MetricCell({
   );
 }
 
-/** 用量总览：KPI 指标条 + 趋势/Provider 分布 */
+/** 用量总览：KPI + 用量走势 + 维度分布 + Token 构成 + 活动热力图 */
 export function OverviewSummary({ summary, loading, pricing }: OverviewSectionProps) {
   const { t } = useI18n();
   const { formatNumber, formatTokens, formatCost } = useFormat();
-  const [trendView, setTrendView] = useState<TrendView>("requests");
+  const [metric, setMetric] = useState<UsageMetric>("tokens");
+  const [dimension, setDimension] = useState<UsageDimension>("model");
 
   const models = summary?.model_stats ?? [];
   const hourly = summary?.bucket === "hour";
@@ -206,39 +214,77 @@ export function OverviewSummary({ summary, loading, pricing }: OverviewSectionPr
           />
         </div>
       </div>
-      {/* 宏观两图联动：调用走势 + Token 构成。渠道分布已在“用量分布”中按 Provider 维度展示，不重复画 */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {/* 图 1：调用走势 */}
-        <Card className="flex flex-col">
+      {!loading && <UnmatchedPricing models={models} pricing={pricing} />}
+
+      {/* 第一排：用量走势 + 维度分布（窄屏自动上下排列） */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <Card className="flex flex-col lg:col-span-2">
           <CardHeader className="pb-2">
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <CardTitle className="flex items-center gap-2 text-sm">
                 <TrendingUp className="size-4 text-muted-foreground" />
                 {hourly ? t("overview.trend.hourly") : t("overview.trend.daily")}
               </CardTitle>
-              <Tabs value={trendView} onValueChange={(value) => value && setTrendView(value as TrendView)}>
-                <TabsList className="h-7">
-                  <TabsTrigger value="requests" className="px-2 text-xs">
-                    {t("overview.trend.tab_requests")}
-                  </TabsTrigger>
-                  <TabsTrigger value="tokens" className="px-2 text-xs">
-                    {t("overview.trend.tab_tokens")}
-                  </TabsTrigger>
+              <Tabs value={metric} onValueChange={(value) => value && setMetric(value as UsageMetric)}>
+                <TabsList className="h-auto flex-wrap">
+                  {USAGE_METRICS.map((item) => (
+                    <TabsTrigger key={item} value={item} className="h-6.5 px-2 text-xs">
+                      {t(`usage_chart.metric_${item}` as never)}
+                    </TabsTrigger>
+                  ))}
                 </TabsList>
               </Tabs>
             </div>
           </CardHeader>
-          <CardContent className="flex flex-1 items-center pt-2">
+          <CardContent className="pt-2">
             {loading ? (
-              <Skeleton className="h-52 w-full" />
+              <Skeleton className="h-80 w-full" />
             ) : (
-              <TrendChart points={summary?.trend ?? []} hourly={hourly} view={trendView} />
+              <UsageTimeChart summary={summary} metric={metric} pricing={pricing} />
             )}
           </CardContent>
         </Card>
 
-        {/* 图 2：Token 构成与分布（水平条形图，使用 chart 色阶） */}
-        <Card className="flex flex-col">
+        <Card className="flex flex-col lg:col-span-1">
+          <CardHeader className="gap-2 pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <ChartColumn className="size-4 text-muted-foreground" />
+              {t("overview.dimension.title")}
+            </CardTitle>
+            <Tabs value={dimension} onValueChange={(value) => value && setDimension(value as UsageDimension)}>
+              <TabsList className="h-auto flex-wrap">
+                {USAGE_DIMENSIONS.map((item) => (
+                  <TabsTrigger key={item} value={item} className="h-6.5 px-2 text-xs">
+                    {t(DIMENSION_LABEL_KEY[item] as never)}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+          </CardHeader>
+          <CardContent className="pt-2">
+            {loading ? (
+              <Skeleton className="h-80 w-full" />
+            ) : (
+              <DimensionBreakdown
+                stats={{
+                  model: summary?.model_stats ?? [],
+                  provider: summary?.provider_stats ?? [],
+                  session: summary?.session_stats ?? [],
+                  auth: summary?.auth_stats ?? [],
+                  key: summary?.api_key_stats ?? [],
+                }}
+                dimension={dimension}
+                metric={metric}
+                pricing={pricing}
+              />
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 第二排：Token 构成 + 活动热力图，热力图占两列保持可读宽度 */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <Card className="flex flex-col lg:col-span-1">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm">
               <Cpu className="size-4 text-muted-foreground" />
@@ -249,24 +295,24 @@ export function OverviewSummary({ summary, loading, pricing }: OverviewSectionPr
             {loading ? <Skeleton className="h-52 w-full" /> : <TokenBarChart summary={summary} />}
           </CardContent>
         </Card>
-      </div>
 
-      {/* GitHub 风格活动热力图：按天查看请求 / Token / 费用 */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2 text-sm">
-            <CalendarDays className="size-4 text-muted-foreground" />
-            {t("heatmap.title")}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pt-2">
-          {loading ? (
-            <Skeleton className="h-32 w-full" />
-          ) : (
-            <ActivityHeatmap summary={summary} pricingTable={pricing.table} />
-          )}
-        </CardContent>
-      </Card>
+        {/* GitHub 风格活动热力图：按天查看请求 / Token / 费用 */}
+        <Card className="flex flex-col lg:col-span-2">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <CalendarDays className="size-4 text-muted-foreground" />
+              {t("heatmap.title")}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-2">
+            {loading ? (
+              <Skeleton className="h-32 w-full" />
+            ) : (
+              <ActivityHeatmap summary={summary} pricingTable={pricing.table} />
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       {dropped > 0 && (
         <Alert variant="destructive">
@@ -339,45 +385,5 @@ function UnmatchedPricing({ models, pricing }: { models: SummaryData["model_stat
         />
       )}
     </>
-  );
-}
-
-/** 用量分布：维度 × 指标两个 tab 组共享一份聚合数据，会话维度并入同一张直方图。 */
-export function OverviewUsage({ summary, loading, pricing }: OverviewSectionProps) {
-  const { t } = useI18n();
-  const models = summary?.model_stats ?? [];
-
-  return (
-    <div className="flex min-h-[calc(100svh-12rem)] flex-col gap-6">
-      {/* 未匹配定价的模型放在上方，图表占满剩余高度 */}
-      {!loading && <UnmatchedPricing models={models} pricing={pricing} />}
-
-      <Card className="flex min-h-0 flex-1 flex-col">
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2 text-sm">
-            <ChartColumn className="size-4 text-muted-foreground" />
-            {t("usage_tab.title")}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="flex min-h-0 flex-1 flex-col pt-2">
-          {loading ? (
-            <Skeleton className="min-h-72 w-full flex-1" />
-          ) : (
-            <DimensionUsageChart
-              stats={{
-                model: summary?.model_stats ?? [],
-                provider: summary?.provider_stats ?? [],
-                session: summary?.session_stats ?? [],
-                auth: summary?.auth_stats ?? [],
-                key: summary?.api_key_stats ?? [],
-              }}
-              pricingTable={pricing.table}
-              dimensions={["model", "provider", "session", "auth", "key"]}
-              defaultDimension="model"
-            />
-          )}
-        </CardContent>
-      </Card>
-    </div>
   );
 }

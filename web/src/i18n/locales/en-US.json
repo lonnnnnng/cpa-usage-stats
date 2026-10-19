@@ -53,7 +53,6 @@
     },
     "tabs": {
       "overview": "Overview",
-      "usage": "Usage",
       "records": "Records",
       "storage": "Storage"
     },
@@ -82,8 +81,7 @@
         "center": "management center"
       },
       "source_label": "Source: {{source}}"
-    },
-    "tabs.usage": "Usage"
+    }
   },
   "overview": {
     "kpi": {
@@ -116,14 +114,17 @@
       "hourly": "Hourly trend",
       "daily": "Daily trend",
       "total_tokens": "{{value}} total",
+      "requests_total": "Requests {{value}}",
       "empty": "No trend data",
-      "tab_requests": "Requests",
-      "tab_tokens": "Tokens",
+      "avg_latency": "Avg latency",
       "input_label": "Input tokens",
       "output_label": "Output tokens",
       "latency_line": "Avg {{avg}} · P95 {{p95}}",
       "requests_ok": "Succeeded",
       "failed_requests": "Failed"
+    },
+    "dimension": {
+      "title": "Breakdown"
     },
     "dropped": {
       "title": "{{count}} usage records were dropped",
@@ -289,9 +290,6 @@
     "dim_session": "Session",
     "dim_auth": "Credential",
     "dim_key": "Client key"
-  },
-  "usage_tab": {
-    "title": "Usage breakdown"
   },
   "heatmap": {
     "title": "Activity heatmap",

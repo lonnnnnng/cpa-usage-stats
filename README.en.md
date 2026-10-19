@@ -7,7 +7,7 @@ CLIProxyAPI (CPA 8.0+) usage statistics plugin: collects request and token usage
 ## Overview
 
 - Collects requests, tokens, latency and failures, then writes them to SQLite in asynchronous batches.
-- Embedded dashboard with overview, model, credential, diagnostics and request-detail views.
+- Embedded dashboard with usage trends, breakdowns, token composition, an activity heatmap, request details and storage usage.
 - Configurable retention, excluded models and batch-write parameters.
 
 ## Development

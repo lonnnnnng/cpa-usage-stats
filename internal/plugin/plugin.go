@@ -111,18 +111,24 @@ type metadataResponse struct {
 type configFieldInfo struct {
 	Name        string `json:"Name"`
 	Type        string `json:"Type"`
+	Default     any    `json:"Default,omitempty"`
 	Description string `json:"Description"`
 }
 
 var configFields = []configFieldInfo{
-	{Name: "db_path", Type: "string", Description: "SQLite 数据库路径，相对 CLIProxyAPI 工作目录 (默认 plugins/cpa-usage-stats/usage.db)"},
-	{Name: "batch_size", Type: "integer", Description: "批量写入条数阈值 (默认 100)"},
-	{Name: "flush_interval_ms", Type: "integer", Description: "批量写入最长间隔毫秒数 (默认 1000)"},
-	{Name: "channel_size", Type: "integer", Description: "内存缓冲队列容量，满了会丢弃新记录 (默认 10000)"},
-	{Name: "retention_days", Type: "integer", Description: "数据保留天数，0 为永久保存 (默认 90)"},
-	{Name: "exclude_models", Type: "array", Description: "不记录的模型或别名列表"},
-	{Name: "dashboard_path", Type: "string", Description: "看板资源路径 (默认 /dashboard)"},
-	{Name: "dashboard_title", Type: "string", Description: "管理中心菜单名称 (默认 用量统计)"},
+	{
+		Name:        "db_path",
+		Type:        "string",
+		Default:     "plugins/cpa-usage-stats/usage.db",
+		Description: "SQLite 数据库路径，相对 CLIProxyAPI 工作目录",
+	},
+	{Name: "batch_size", Type: "integer", Default: 100, Description: "批量写入条数阈值"},
+	{Name: "flush_interval_ms", Type: "integer", Default: 1000, Description: "批量写入最长间隔毫秒数"},
+	{Name: "channel_size", Type: "integer", Default: 10000, Description: "内存缓冲队列容量，满了会丢弃新记录"},
+	{Name: "retention_days", Type: "integer", Default: 90, Description: "数据保留天数，0 为永久保存"},
+	{Name: "exclude_models", Type: "array", Default: []string{}, Description: "不记录的模型或别名列表"},
+	{Name: "dashboard_path", Type: "string", Default: "/dashboard", Description: "看板资源路径"},
+	{Name: "dashboard_title", Type: "string", Default: "用量统计", Description: "管理中心菜单名称"},
 }
 
 func (p *Instance) handleRegister(payload []byte) ([]byte, error) {

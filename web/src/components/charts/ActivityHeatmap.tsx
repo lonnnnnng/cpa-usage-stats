@@ -3,7 +3,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useFormat } from "@/hooks/use-format";
 import { useI18n } from "@/i18n/context";
-import { groupCostDetails, type PricingTable } from "@/lib/pricing";
+import { costPerToken, type PricingTable } from "@/lib/pricing";
 import { cn } from "@/lib/utils";
 import type { SummaryData } from "@/types";
 
@@ -55,30 +55,8 @@ export function ActivityHeatmap({
   const [metric, setMetric] = useState<HeatmapMetric>("requests");
 
   const { weeks, monthLabels, max, total } = useMemo(() => {
-    const costByDay = new Map<string, number>();
-    if (metric === "cost" && pricingTable) {
-      // 趋势桶同时携带各模型的当日 token；按模型单价折算后累加成当日费用。
-      for (const point of summary?.trend ?? []) {
-        const details = groupCostDetails(pricingTable, {
-          name: point.bucket,
-          secondary: "",
-          requests: point.requests,
-          failed: point.failed,
-          total_tokens: point.tokens,
-          input_tokens: point.input_tokens,
-          output_tokens: point.output_tokens,
-          reasoning_tokens: 0,
-          cached_tokens: 0,
-          cache_read_tokens: 0,
-          cache_creation_tokens: 0,
-          avg_latency_ms: point.avg_latency_ms,
-          p95_latency_ms: point.p95_latency_ms,
-          avg_ttft_ms: 0,
-          stream_requests: 0,
-        });
-        if (details) costByDay.set(point.bucket, details.cost);
-      }
-    }
+    // 趋势桶只有 token 总量，没有逐模型构成；费用用整体混合单价按桶 token 折算。
+    const costRate = metric === "cost" && pricingTable ? costPerToken(pricingTable, summary?.model_stats ?? []) : null;
 
     const trend = summary?.trend ?? [];
     const hourly = summary?.bucket === "hour";
@@ -92,7 +70,9 @@ export function ActivityHeatmap({
           ? point.tokens
           : metric === "requests"
             ? point.requests
-            : (costByDay.get(point.bucket) ?? 0);
+            : costRate === null
+              ? 0
+              : point.tokens * costRate;
       valueByDay.set(key, (valueByDay.get(key) ?? 0) + value);
     }
     // 小时桶只覆盖当天，热力图的空档不应被误读成“当天没量”。
@@ -181,7 +161,7 @@ export function ActivityHeatmap({
         </div>
       ) : (
         <div className="space-y-1.5 overflow-x-auto">
-          <div className="flex min-w-160 gap-1.5">
+          <div className="flex min-w-140 gap-1.5">
             <div className="flex w-6 shrink-0 flex-col gap-1 pt-4">
               {weekdayLabels.map((label) => (
                 <span key={label.key} className="h-3 text-[9px] leading-3 text-muted-foreground">

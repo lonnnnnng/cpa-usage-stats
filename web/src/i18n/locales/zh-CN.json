@@ -53,7 +53,6 @@
     },
     "tabs": {
       "overview": "用量总览",
-      "usage": "用量分布",
       "records": "调用明细",
       "storage": "空间占用"
     },
@@ -82,8 +81,7 @@
         "center": "管理中心"
       },
       "source_label": "来源：{{source}}"
-    },
-    "tabs.usage": "用量分布"
+    }
   },
   "overview": {
     "kpi": {
@@ -116,14 +114,17 @@
       "hourly": "按小时走势",
       "daily": "按天走势",
       "total_tokens": "合计 {{value}}",
+      "requests_total": "请求 {{value}}",
       "empty": "暂无趋势数据",
-      "tab_requests": "请求数",
-      "tab_tokens": "词元消耗",
+      "avg_latency": "平均耗时",
       "input_label": "输入词元",
       "output_label": "输出词元",
       "latency_line": "平均 {{avg}} · P95 {{p95}}",
       "requests_ok": "成功请求",
       "failed_requests": "失败请求"
+    },
+    "dimension": {
+      "title": "维度分布"
     },
     "dropped": {
       "title": "有 {{count}} 条用量记录被丢弃",
@@ -289,9 +290,6 @@
     "dim_session": "会话",
     "dim_auth": "凭据",
     "dim_key": "客户端 Key"
-  },
-  "usage_tab": {
-    "title": "用量分布"
   },
   "heatmap": {
     "title": "活动热力图",
