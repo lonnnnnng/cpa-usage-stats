@@ -1,0 +1,242 @@
+import { useMemo, useState } from "react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useFormat } from "@/hooks/use-format";
+import { useI18n } from "@/i18n/context";
+import { groupCostDetails, type PricingTable } from "@/lib/pricing";
+import { cn } from "@/lib/utils";
+import type { SummaryData } from "@/types";
+
+export type HeatmapMetric = "tokens" | "requests" | "cost";
+
+const METRICS: HeatmapMetric[] = ["tokens", "requests", "cost"];
+const WEEKS = 26;
+const DAYS = 7;
+const DAY_MS = 86_400_000;
+
+/** 强度分档：0 为空，其余四档递增透明度。 */
+const LEVEL_CLASS = ["bg-muted/60", "bg-chart-3/25", "bg-chart-3/45", "bg-chart-3/70", "bg-chart-3"] as const;
+
+function startOfDay(date: Date): Date {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  return next;
+}
+
+/** 热力图按周列排布，这里取包含该日的周一作为列起点。 */
+function startOfWeek(date: Date): Date {
+  const next = startOfDay(date);
+  next.setDate(next.getDate() - ((next.getDay() + 6) % 7));
+  return next;
+}
+
+function dayKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+type Cell = { key: string; date: Date; value: number; level: number };
+
+/**
+ * GitHub 风格活动热力图：按天统计，通过 tabs 切换 Token、请求、费用。
+ * 费用来自模型聚合按天摊算，与其它页签的成本口径一致。
+ */
+export function ActivityHeatmap({
+  summary,
+  pricingTable,
+  className,
+}: {
+  summary: SummaryData | null;
+  pricingTable: PricingTable | null;
+  className?: string;
+}) {
+  const { t } = useI18n();
+  const { formatNumber, formatTokens, formatCost } = useFormat();
+  const [metric, setMetric] = useState<HeatmapMetric>("requests");
+
+  const { weeks, monthLabels, max, total } = useMemo(() => {
+    const costByDay = new Map<string, number>();
+    if (metric === "cost" && pricingTable) {
+      // 趋势桶同时携带各模型的当日 token；按模型单价折算后累加成当日费用。
+      for (const point of summary?.trend ?? []) {
+        const details = groupCostDetails(pricingTable, {
+          name: point.bucket,
+          secondary: "",
+          requests: point.requests,
+          failed: point.failed,
+          total_tokens: point.tokens,
+          input_tokens: point.input_tokens,
+          output_tokens: point.output_tokens,
+          reasoning_tokens: 0,
+          cached_tokens: 0,
+          cache_read_tokens: 0,
+          cache_creation_tokens: 0,
+          avg_latency_ms: point.avg_latency_ms,
+          p95_latency_ms: point.p95_latency_ms,
+          avg_ttft_ms: 0,
+          stream_requests: 0,
+        });
+        if (details) costByDay.set(point.bucket, details.cost);
+      }
+    }
+
+    const trend = summary?.trend ?? [];
+    const hourly = summary?.bucket === "hour";
+    const valueByDay = new Map<string, number>();
+    for (const point of trend) {
+      const date = new Date(point.bucket.replace(" ", "T"));
+      if (Number.isNaN(date.getTime())) continue;
+      const key = dayKey(date);
+      const value =
+        metric === "tokens"
+          ? point.tokens
+          : metric === "requests"
+            ? point.requests
+            : (costByDay.get(point.bucket) ?? 0);
+      valueByDay.set(key, (valueByDay.get(key) ?? 0) + value);
+    }
+    // 小时桶只覆盖当天，热力图的空档不应被误读成“当天没量”。
+    const partialDays = new Set(hourly ? [dayKey(new Date())] : []);
+
+    const today = startOfDay(new Date());
+    const firstWeek = startOfWeek(new Date(today.getTime() - (WEEKS - 1) * 7 * DAY_MS));
+    const values: number[] = [];
+    const matrix: Cell[][] = [];
+    const labels: { index: number; text: string }[] = [];
+
+    for (let week = 0; week < WEEKS; week++) {
+      const column: Cell[] = [];
+      for (let day = 0; day < DAYS; day++) {
+        const date = new Date(firstWeek.getTime() + (week * DAYS + day) * DAY_MS);
+        const key = dayKey(date);
+        const future = date.getTime() > today.getTime();
+        const value = future || partialDays.has(key) ? 0 : (valueByDay.get(key) ?? 0);
+        if (!future && !partialDays.has(key)) values.push(value);
+        column.push({ key, date, value, level: 0 });
+      }
+      const first = column[0].date;
+      if (first.getDate() <= DAYS) {
+        labels.push({ index: week, text: `${first.getMonth() + 1}/${first.getDate()}` });
+      }
+      matrix.push(column);
+    }
+
+    const peak = Math.max(1, ...values);
+    for (const column of matrix) {
+      for (const cell of column) {
+        cell.level = cell.value <= 0 ? 0 : Math.min(4, Math.ceil((cell.value / peak) * 4));
+      }
+    }
+
+    return {
+      weeks: matrix,
+      monthLabels: labels,
+      max: peak,
+      total: values.reduce((sum, value) => sum + value, 0),
+    };
+  }, [metric, pricingTable, summary]);
+
+  const formatValue = (value: number) => {
+    if (metric === "tokens") return formatTokens(value);
+    if (metric === "requests") return formatNumber(value);
+    return formatCost(value);
+  };
+
+  // 只标注周一/周三/周五，其余留空；用固定 key 保证行序稳定
+  const weekdayLabels: { key: string; text: string }[] = [
+    { key: "mon", text: t("heatmap.weekday_mon") },
+    { key: "tue", text: "" },
+    { key: "wed", text: t("heatmap.weekday_wed") },
+    { key: "thu", text: "" },
+    { key: "fri", text: t("heatmap.weekday_fri") },
+    { key: "sat", text: "" },
+    { key: "sun", text: "" },
+  ];
+
+  const hasData = max > 1 || total > 0;
+
+  return (
+    <div className={cn("space-y-3", className)}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-xs text-muted-foreground">
+          {t("heatmap.summary", {
+            total: formatValue(total),
+            days: formatNumber(WEEKS * DAYS),
+          })}
+        </span>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {METRICS.map((item) => (
+            <button
+              key={item}
+              type="button"
+              aria-pressed={metric === item}
+              onClick={() => setMetric(item)}
+              className={cn(
+                "rounded-md px-2 py-0.5 text-xs transition-colors",
+                metric === item
+                  ? "bg-secondary text-secondary-foreground"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
+              )}
+            >
+              {t(`heatmap.metric_${item}` as never)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {!hasData ? (
+        <div className="flex h-32 items-center justify-center text-xs text-muted-foreground">
+          {metric === "cost" && !pricingTable ? t("usage_chart.cost_unavailable") : t("heatmap.empty")}
+        </div>
+      ) : (
+        <div className="space-y-1.5 overflow-x-auto">
+          <div className="flex gap-1.5">
+            <div className="flex w-6 shrink-0 flex-col gap-1 pt-4">
+              {weekdayLabels.map((label) => (
+                <span key={label.key} className="h-3 text-[9px] leading-3 text-muted-foreground">
+                  {label.text}
+                </span>
+              ))}
+            </div>
+            <div className="flex gap-1">
+              {weeks.map((column, weekIndex) => {
+                const label = monthLabels.find((item) => item.index === weekIndex);
+                return (
+                  <div key={column[0].key} className="flex flex-col gap-1">
+                    <span className="h-3 text-[9px] leading-3 whitespace-nowrap text-muted-foreground">
+                      {label?.text ?? ""}
+                    </span>
+                    {column.map((cell) => (
+                      <Tooltip key={cell.key}>
+                        <TooltipTrigger
+                          render={
+                            <span
+                              className={cn(
+                                "size-3 rounded-xs transition-colors hover:ring-1 hover:ring-ring",
+                                LEVEL_CLASS[cell.level],
+                              )}
+                            />
+                          }
+                        />
+                        <TooltipContent>
+                          <span className="font-mono tabular-nums">
+                            {dayKey(cell.date)} · {formatValue(cell.value)}
+                          </span>
+                        </TooltipContent>
+                      </Tooltip>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="flex items-center justify-end gap-1 text-[10px] text-muted-foreground">
+            <span>{t("heatmap.less")}</span>
+            {LEVEL_CLASS.map((level) => (
+              <span key={level} className={cn("size-3 rounded-xs", level)} />
+            ))}
+            <span>{t("heatmap.more")}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
