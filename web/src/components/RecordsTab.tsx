@@ -1,19 +1,6 @@
-import {
-  AlertCircle,
-  Check,
-  CheckCircle2,
-  ChevronDown,
-  Coins,
-  Copy,
-  Cpu,
-  ExternalLink,
-  Hash,
-  Layers,
-  RotateCcw,
-  Search,
-  SlidersHorizontal,
-} from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import { AlertCircle, Check, CheckCircle2, Copy, Layers, RotateCcw, Search } from "lucide-react";
+import { useEffect, useState } from "react";
+import { latencyTone, toneTextClass } from "@/components/charts/UsageBarChart";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -112,98 +99,6 @@ function FilterSelect({
 }
 
 /** 单条字段：标签 + 值 + 复制。长值默认单行截断，完整内容交给原生 title。 */
-function DetailItem({
-  label,
-  value,
-  href,
-  badge,
-}: {
-  label: string;
-  value: string;
-  href?: string;
-  /** 短枚举值（错误类型、模式等）用徽章呈现，和长 ID 拉开层次 */
-  badge?: boolean;
-}) {
-  const { t } = useI18n();
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = async () => {
-    if (!value || !(await copyToClipboard(value))) return;
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1800);
-  };
-
-  const text = value || "-";
-
-  return (
-    // 表格单元格带 whitespace-nowrap，这里必须显式恢复正常换行，否则 truncate 不生效
-    <div className="min-w-0 space-y-1 whitespace-normal">
-      <span className="block text-xs font-medium text-muted-foreground">{label}</span>
-      <div className="flex min-w-0 items-center gap-1 text-xs">
-        {badge ? (
-          <Badge variant="secondary" className="max-w-full font-mono font-normal">
-            <span className="truncate">{text}</span>
-          </Badge>
-        ) : href ? (
-          <a
-            href={href}
-            target="_blank"
-            rel="noreferrer"
-            title={value}
-            className="inline-flex min-w-0 items-center gap-1 font-mono hover:underline"
-          >
-            <span className="min-w-0 truncate">{text}</span>
-            <ExternalLink className="size-3 shrink-0 text-muted-foreground" />
-          </a>
-        ) : (
-          <span className="min-w-0 truncate font-mono" title={value || undefined}>
-            {text}
-          </span>
-        )}
-        {value && (
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            className="shrink-0 text-muted-foreground hover:text-foreground"
-            title={copied ? t("common.copied") : t("common.copy")}
-            aria-label={copied ? t("common.copied") : t("common.copy")}
-            onClick={handleCopy}
-          >
-            {copied ? <Check className="text-primary" /> : <Copy />}
-          </Button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/** 分区小标题：一条细线加标签，把展开区切成可扫读的几段。 */
-function SectionLabel({ icon, children }: { icon: ReactNode; children: ReactNode }) {
-  return (
-    <div className="flex items-center gap-1.5 border-b pb-1.5 text-xs font-medium text-muted-foreground">
-      <span className="[&_svg]:size-3.5">{icon}</span>
-      {children}
-    </div>
-  );
-}
-
-/** 词元/费用统计块：标签在上、等宽数字在下，比串成一行的公式好扫读。 */
-function TokenStat({ label, value, emphasis }: { label: string; value: string; emphasis?: boolean }) {
-  return (
-    <div className="space-y-0.5">
-      <span className="block text-xs text-muted-foreground">{label}</span>
-      <span
-        className={cn(
-          "block font-mono text-sm tabular-nums",
-          emphasis ? "font-semibold text-primary" : "text-foreground",
-        )}
-      >
-        {value}
-      </span>
-    </div>
-  );
-}
-
 function CostCell({ cost }: { cost: RecordCost | null }) {
   const { t } = useI18n();
   const { formatCost, formatUnitPrice } = useFormat();
@@ -254,156 +149,173 @@ function DetailRow({ record, cost }: { record: StoredRecord; cost: RecordCost | 
   const { formatNumber, formatCost } = useFormat();
   const hasFailure = Boolean(record.failure_body) || Object.keys(record.response_headers ?? {}).length > 0;
 
-  // 三个 ID 是同构的长串，横排平铺会互相挤，单独一段纵向对齐后复制和比对都方便
-  const ids = [
+  // 字段压成一行行的内联条目；长值截断并悬浮展示，避免每条记录展开后占据整屏
+  const metaItems: { label: string; value: string; badge?: boolean }[] = [
     { label: t("records.detail.request_id"), value: record.request_id },
     { label: t("records.detail.trace_id"), value: record.trace_id },
     { label: t("records.detail.session_id"), value: record.session_id },
     ...(record.parent_session_id
       ? [{ label: t("records.detail.parent_session"), value: record.parent_session_id }]
       : []),
+    { label: t("records.detail.base_url"), value: record.base_url },
+    {
+      label: t("records.detail.auth"),
+      value: [record.auth_id, record.auth_index && `#${record.auth_index}`, record.auth_type]
+        .filter(Boolean)
+        .join(" · "),
+    },
+    { label: t("records.detail.executor"), value: record.executor_type },
+    { label: t("records.detail.source"), value: record.source },
+    { label: t("records.detail.reasoning_effort"), value: record.reasoning_effort },
+    {
+      label: t("records.detail.service_tier"),
+      value:
+        record.service_tier || record.response_service_tier
+          ? `${record.service_tier || "-"} → ${record.response_service_tier || "-"}`
+          : "-",
+    },
+    {
+      label: t("records.detail.mode"),
+      value: [
+        record.stream ? t("records.detail.stream") : t("records.detail.non_stream"),
+        record.generate ? t("records.detail.generate") : t("records.detail.not_generate"),
+      ].join(" · "),
+    },
+    ...(record.failed && record.error_type
+      ? [{ label: t("records.detail.error_type"), value: record.error_type, badge: true }]
+      : []),
+    {
+      label: t("records.detail.pricing_source"),
+      value: cost
+        ? `${cost.match.providerId}/${cost.match.modelId} (${cost.match.matchType})`
+        : t("records.detail.unmatched"),
+      badge: Boolean(cost),
+    },
+    {
+      label: t("records.detail.auth_source"),
+      value: record.is_native_key ? t("records.detail.native_key") : record.access_provider || "-",
+      badge: record.is_native_key || Boolean(record.access_provider),
+    },
+  ];
+
+  // 词元与费用压成一行 KV，与上面的元信息用一条分隔线区分
+  const tokenItems: { label: string; value: string; emphasis?: boolean }[] = [
+    { label: t("records.detail.token_input"), value: formatNumber(record.input_tokens) },
+    { label: t("records.detail.token_output"), value: formatNumber(record.output_tokens) },
+    ...(record.reasoning_tokens > 0
+      ? [{ label: t("records.detail.token_reasoning"), value: formatNumber(record.reasoning_tokens) }]
+      : []),
+    ...(record.cache_read_tokens > 0
+      ? [{ label: t("records.detail.token_cache_read"), value: formatNumber(record.cache_read_tokens) }]
+      : []),
+    ...(record.cache_creation_tokens > 0
+      ? [{ label: t("records.detail.token_cache_write"), value: formatNumber(record.cache_creation_tokens) }]
+      : []),
+    ...(record.cache_read_tokens > 0 && record.input_tokens > 0
+      ? [
+          {
+            label: t("records.detail.token_cache_rate"),
+            value: `${((record.cache_read_tokens / (record.input_tokens + record.cache_read_tokens)) * 100).toFixed(1)}%`,
+            emphasis: true,
+          },
+        ]
+      : []),
+    { label: t("records.detail.token_total"), value: formatNumber(record.total_tokens), emphasis: true },
+    ...(cost ? [{ label: t("records.detail.estimate_label"), value: formatCost(cost.cost), emphasis: true }] : []),
   ];
 
   return (
-    <TableRow className="bg-muted/40 hover:bg-muted/40">
-      <TableCell colSpan={9} className="whitespace-normal p-0">
-        <div className="space-y-4 border-l-2 border-primary/30 px-4 py-3">
-          <section className="space-y-2">
-            <SectionLabel icon={<Hash />}>{t("records.detail.section_ids")}</SectionLabel>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {ids.map((item) => (
-                <DetailItem key={item.label} label={item.label} value={item.value} />
-              ))}
-            </div>
-          </section>
+    <TableRow className="bg-muted/30 hover:bg-muted/30">
+      <TableCell colSpan={7} className="whitespace-normal px-4 py-3">
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-x-5 gap-y-1.5">
+            {metaItems.map((item) => (
+              <CompactItem key={item.label} label={item.label} value={item.value} badge={item.badge} />
+            ))}
+          </div>
 
-          <section className="space-y-2">
-            <SectionLabel icon={<Cpu />}>{t("records.detail.section_route")}</SectionLabel>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <DetailItem
-                label={t("records.detail.base_url")}
-                value={record.base_url}
-                href={record.base_url?.startsWith("http") ? record.base_url : undefined}
-              />
-              <DetailItem
-                label={t("records.detail.auth")}
-                value={[record.auth_id, record.auth_index && `#${record.auth_index}`, record.auth_type]
-                  .filter(Boolean)
-                  .join(" · ")}
-              />
-              <DetailItem label={t("records.detail.executor")} value={record.executor_type} />
-              <DetailItem
-                label={t("records.detail.pricing_source")}
-                value={
-                  cost
-                    ? `${cost.match.providerId}/${cost.match.modelId} (${cost.match.matchType})`
-                    : t("records.detail.unmatched")
-                }
-              />
-              <DetailItem
-                label={t("records.detail.auth_source")}
-                value={record.is_native_key ? t("records.detail.native_key") : record.access_provider || "-"}
-                badge={record.is_native_key || Boolean(record.access_provider)}
-              />
-            </div>
-          </section>
-
-          <section className="space-y-2">
-            <SectionLabel icon={<SlidersHorizontal />}>{t("records.detail.section_params")}</SectionLabel>
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              <DetailItem label={t("records.detail.source")} value={record.source} />
-              <DetailItem label={t("records.detail.reasoning_effort")} value={record.reasoning_effort} />
-              <DetailItem
-                label={t("records.detail.service_tier")}
-                value={
-                  record.service_tier || record.response_service_tier
-                    ? `${record.service_tier || "-"} → ${record.response_service_tier || "-"}`
-                    : "-"
-                }
-              />
-              <DetailItem
-                label={t("records.detail.mode")}
-                value={[
-                  record.stream ? t("records.detail.stream") : t("records.detail.non_stream"),
-                  record.generate ? t("records.detail.generate") : t("records.detail.not_generate"),
-                ].join(" · ")}
-              />
-              {record.failed && record.error_type && (
-                <DetailItem badge label={t("records.detail.error_type")} value={record.error_type} />
-              )}
-            </div>
-          </section>
-
-          <section className="space-y-2">
-            <SectionLabel icon={<Coins />}>{t("records.detail.tokens_detail")}</SectionLabel>
-            <div className="flex flex-wrap gap-x-4 gap-y-2">
-              <TokenStat label={t("records.detail.token_input")} value={formatNumber(record.input_tokens)} />
-              <TokenStat label={t("records.detail.token_output")} value={formatNumber(record.output_tokens)} />
-              {record.reasoning_tokens > 0 && (
-                <TokenStat label={t("records.detail.token_reasoning")} value={formatNumber(record.reasoning_tokens)} />
-              )}
-              {record.cache_read_tokens > 0 && (
-                <TokenStat
-                  label={t("records.detail.token_cache_read")}
-                  value={formatNumber(record.cache_read_tokens)}
-                />
-              )}
-              {record.cache_creation_tokens > 0 && (
-                <TokenStat
-                  label={t("records.detail.token_cache_write")}
-                  value={formatNumber(record.cache_creation_tokens)}
-                />
-              )}
-              {record.cache_read_tokens > 0 && record.input_tokens > 0 && (
-                <TokenStat
-                  label={t("records.detail.token_cache_rate")}
-                  value={`${((record.cache_read_tokens / (record.input_tokens + record.cache_read_tokens)) * 100).toFixed(1)}%`}
-                  emphasis
-                />
-              )}
-              <TokenStat label={t("records.detail.token_total")} value={formatNumber(record.total_tokens)} emphasis />
-              {cost && <TokenStat label={t("records.detail.estimate_label")} value={formatCost(cost.cost)} emphasis />}
-            </div>
-          </section>
+          <div className="flex flex-wrap gap-x-4 gap-y-1.5 border-t pt-2.5">
+            {tokenItems.map((item) => (
+              <span key={item.label} className="inline-flex items-baseline gap-1 text-xs">
+                <span className="text-muted-foreground">{item.label}</span>
+                <span className={cn("font-mono tabular-nums", item.emphasis && "font-semibold text-primary")}>
+                  {item.value}
+                </span>
+              </span>
+            ))}
+          </div>
 
           {hasFailure && (
-            <section className="space-y-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
-              <div className="flex items-center gap-1.5 text-xs font-medium text-destructive">
-                <AlertCircle className="size-4" />
+            <details className="rounded-md border border-destructive/30 bg-destructive/5 px-2.5 py-2">
+              <summary className="flex cursor-pointer items-center gap-1.5 text-xs font-medium text-destructive">
+                <AlertCircle className="size-3.5" />
                 {t("records.detail.failure_title", { status: record.status_code || 500 })}
-              </div>
-              {record.failure_body && (
-                <div className="space-y-1">
-                  <span className="text-xs font-medium text-muted-foreground">{t("records.detail.failure_body")}</span>
-                  <pre className="max-h-56 overflow-auto rounded-md bg-background p-2.5 font-mono text-xs">
+              </summary>
+              <div className="mt-2 space-y-2">
+                {record.failure_body && (
+                  <pre className="max-h-56 overflow-auto rounded-md bg-background p-2.5 font-mono text-xs whitespace-pre-wrap break-all">
                     {record.failure_body}
                   </pre>
-                </div>
-              )}
-              {record.response_headers && Object.keys(record.response_headers).length > 0 && (
-                <div className="space-y-1">
-                  <span className="text-xs font-medium text-muted-foreground">
-                    {t("records.detail.failure_headers")}
-                  </span>
+                )}
+                {record.response_headers && Object.keys(record.response_headers).length > 0 && (
                   <div className="flex flex-wrap gap-1.5 font-mono text-xs">
                     {Object.entries(record.response_headers).map(([name, values]) => (
-                      // 表格基类带 whitespace-nowrap，这里必须显式复位，否则单个超长 header 值会撑出 chip
                       <span
                         key={name}
-                        className="inline-flex max-w-full min-w-0 items-baseline gap-1 whitespace-normal rounded-md border bg-background px-2 py-0.5"
+                        className="inline-flex max-w-full min-w-0 items-baseline gap-1 rounded-md border bg-background px-2 py-0.5 whitespace-normal"
                       >
                         <span className="shrink-0 font-semibold">{name}:</span>
                         <span className="min-w-0 break-all text-muted-foreground">{values.join(", ")}</span>
                       </span>
                     ))}
                   </div>
-                </div>
-              )}
-            </section>
+                )}
+              </div>
+            </details>
           )}
         </div>
       </TableCell>
     </TableRow>
+  );
+}
+
+/** 单行内联字段：标签在前、值在后，长值截断并保留完整内容供悬浮查看。 */
+function CompactItem({ label, value, badge }: { label: string; value: string; badge?: boolean }) {
+  const { t } = useI18n();
+  const [copied, setCopied] = useState(false);
+  const text = value || "-";
+
+  const handleCopy = async () => {
+    if (!value || !(await copyToClipboard(value))) return;
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  };
+
+  return (
+    <span className="inline-flex min-w-0 max-w-full items-baseline gap-1 text-xs">
+      <span className="shrink-0 text-muted-foreground">{label}</span>
+      {badge ? (
+        <Badge variant="secondary" className="max-w-48 shrink-0 truncate font-mono font-normal">
+          {text}
+        </Badge>
+      ) : (
+        <span className="min-w-0 max-w-72 truncate font-mono text-foreground" title={text}>
+          {text}
+        </span>
+      )}
+      {value && (
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="shrink-0 text-muted-foreground hover:text-foreground"
+          title={t("common.copy")}
+          aria-label={t("common.copy")}
+          onClick={handleCopy}
+        >
+          {copied ? <Check className="size-3 text-primary" /> : <Copy className="size-3" />}
+        </Button>
+      )}
+    </span>
   );
 }
 
@@ -421,7 +333,6 @@ export function RecordsTab({
   const { t } = useI18n();
   const { formatNumber } = useFormat();
   const [expandedId, setExpandedId] = useState<number | null>(null);
-  const [copiedKey, setCopiedKey] = useState<string | null>(null);
   // 关键字与会话 ID 本地保留并防抖，避免每敲一个字就发一次查询
   const [keyword, setKeyword] = useState(filters.keyword);
   const [sessionId, setSessionId] = useState(filters.sessionId);
@@ -464,12 +375,6 @@ export function RecordsTab({
     setSessionId("");
     onFiltersChange(EMPTY_FILTERS);
     onPageChange(1);
-  };
-
-  const handleCopyKey = async (key: string) => {
-    if (!(await copyToClipboard(key))) return;
-    setCopiedKey(key);
-    setTimeout(() => setCopiedKey(null), 1800);
   };
 
   const total = data?.total ?? 0;
@@ -585,22 +490,20 @@ export function RecordsTab({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-8" />
-                <TableHead>{t("records.th.time")}</TableHead>
+                <TableHead className="pl-4">{t("records.th.time")}</TableHead>
                 <TableHead>{t("records.th.status")}</TableHead>
                 <TableHead>{t("records.th.model")}</TableHead>
                 <TableHead>{t("records.th.provider")}</TableHead>
                 <TableHead className="w-32 text-right">{t("records.th.tokens")}</TableHead>
                 <TableHead className="w-24 text-right">{t("records.th.cost")}</TableHead>
-                <TableHead className="w-24 text-right">{t("records.th.latency")}</TableHead>
-                <TableHead className="max-w-40">{t("records.th.key")}</TableHead>
+                <TableHead className="w-28 pr-4 text-right">{t("records.th.latency")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading
                 ? ROW_SKELETON_KEYS.map((rowKey) => (
                     <TableRow key={rowKey}>
-                      <TableCell colSpan={9}>
+                      <TableCell colSpan={7} className="px-4">
                         <Skeleton className="h-5 w-full" />
                       </TableCell>
                     </TableRow>
@@ -621,9 +524,7 @@ export function RecordsTab({
                         cost={cost}
                         expanded={expanded}
                         throughput={throughput}
-                        copiedKey={copiedKey}
                         onToggle={() => setExpandedId(expanded ? null : record.id)}
-                        onCopyKey={handleCopyKey}
                       />
                     );
                   })}
@@ -715,17 +616,13 @@ function RecordRows({
   cost,
   expanded,
   throughput,
-  copiedKey,
   onToggle,
-  onCopyKey,
 }: {
   record: StoredRecord;
   cost: RecordCost | null;
   expanded: boolean;
   throughput: string | null;
-  copiedKey: string | null;
   onToggle: () => void;
-  onCopyKey: (key: string) => void;
 }) {
   const { t } = useI18n();
   const { formatTokens } = useFormat();
@@ -751,31 +648,24 @@ function RecordRows({
           event.preventDefault();
           onToggle();
         }}
-        className="group/row cursor-pointer aria-expanded:bg-muted/50"
+        aria-expanded={expanded}
+        className="cursor-pointer aria-expanded:bg-muted/40"
       >
-        <TableCell className="text-muted-foreground">
-          <ChevronDown
-            className={cn(
-              "size-3.5 transition-transform duration-200",
-              expanded ? "rotate-180" : "opacity-60 group-hover/row:opacity-100",
-            )}
-          />
-        </TableCell>
-        <TableCell className="whitespace-nowrap font-mono text-xs text-muted-foreground">
+        <TableCell className="whitespace-nowrap py-3 pl-4 font-mono text-xs text-muted-foreground">
           {formatDateTime(record.requested_at)}
         </TableCell>
-        <TableCell>
+        <TableCell className="py-3">
           <span
             className={cn(
               "inline-flex items-center gap-1 font-mono tabular-nums",
-              record.failed ? "text-destructive" : "text-muted-foreground",
+              record.failed ? "text-destructive" : "text-success",
             )}
           >
             {record.failed ? <AlertCircle className="size-3" /> : <CheckCircle2 className="size-3" />}
             {record.status_code || (record.failed ? 500 : 200)}
           </span>
         </TableCell>
-        <TableCell className="font-medium">
+        <TableCell className="py-3 font-medium">
           <div className="flex max-w-48 flex-col">
             <span className="truncate" title={record.model}>
               {record.model}
@@ -787,12 +677,12 @@ function RecordRows({
             )}
           </div>
         </TableCell>
-        <TableCell className="max-w-24 text-muted-foreground">
+        <TableCell className="max-w-24 py-3 text-muted-foreground">
           <span className="block truncate" title={record.provider || undefined}>
             {record.provider || "-"}
           </span>
         </TableCell>
-        <TableCell className="w-32 text-right font-mono tabular-nums">
+        <TableCell className="w-32 py-3 text-right font-mono tabular-nums">
           <div className="flex items-center justify-end gap-1">
             <span className="text-muted-foreground" title={t("records.detail.token_input")}>
               ↓{formatTokens(record.input_tokens)}
@@ -815,57 +705,17 @@ function RecordRows({
             </div>
           )}
         </TableCell>
-        <TableCell className="w-24 whitespace-nowrap text-right font-mono tabular-nums">
+        <TableCell className="w-24 py-3 whitespace-nowrap text-right font-mono tabular-nums">
           <CostCell cost={cost} />
         </TableCell>
-        <TableCell className="w-24 whitespace-nowrap text-right font-mono tabular-nums">
-          <div>{formatDuration(record.latency_ms)}</div>
+        <TableCell className="w-28 py-3 pr-4 whitespace-nowrap text-right font-mono tabular-nums">
+          <div className={toneTextClass(latencyTone(record.latency_ms))}>{formatDuration(record.latency_ms)}</div>
           {record.stream && record.ttft_ms > 0 && (
             <div className="text-xs text-muted-foreground">
-              TTFT {formatDuration(record.ttft_ms)}
+              <span className={toneTextClass(latencyTone(record.ttft_ms))}>TTFT {formatDuration(record.ttft_ms)}</span>
               {throughput && ` · ${t("records.row.throughput", { value: throughput })}`}
             </div>
           )}
-        </TableCell>
-        <TableCell className="max-w-40 font-mono text-xs text-muted-foreground">
-          <div className="flex min-w-0 items-center gap-1.5">
-            <span className="min-w-0 truncate" title={record.api_key || record.auth_id || undefined}>
-              {record.api_key ? maskApiKey(record.api_key) : record.auth_id || "-"}
-            </span>
-            {record.is_native_key ? (
-              <Badge variant="secondary" className="shrink-0 text-[10px] px-1 py-0 font-normal">
-                {t("records.row.native_key")}
-              </Badge>
-            ) : record.access_provider ? (
-              <Badge
-                variant="outline"
-                className="shrink-0 max-w-16 truncate text-[10px] px-1 py-0 font-mono text-muted-foreground"
-                title={record.access_provider}
-              >
-                {record.access_provider}
-              </Badge>
-            ) : null}
-            {record.auth_index && (
-              <Badge variant="outline" className="shrink-0 font-mono text-[10px]">
-                #{record.auth_index}
-              </Badge>
-            )}
-            {record.api_key && (
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                className="shrink-0 text-muted-foreground hover:text-foreground"
-                title={t("records.row.copy_key")}
-                aria-label={t("records.row.copy_key")}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onCopyKey(record.api_key);
-                }}
-              >
-                {copiedKey === record.api_key ? <Check className="text-primary" /> : <Copy />}
-              </Button>
-            )}
-          </div>
         </TableCell>
       </TableRow>
       {expanded && <DetailRow record={record} cost={cost} />}
