@@ -63,7 +63,7 @@ export function TokenBarChart({ summary, className }: TokenBarChartProps) {
   }
 
   return (
-    <div className={cn("h-44 w-full", className)}>
+    <div className={cn("h-52 w-full", className)}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart layout="vertical" data={data} margin={{ top: 0, right: 24, left: 0, bottom: 0 }}>
           <CartesianGrid horizontal={false} strokeDasharray="3 3" className="stroke-muted/40" />

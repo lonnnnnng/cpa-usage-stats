@@ -58,7 +58,7 @@ export function DonutChart({ stats, metric, className }: DonutChartProps) {
     });
 
     if (rest.length > 0) {
-      const otherLabel = t("overview.provider.other") || "Other";
+      const otherLabel = t("overview.provider_other");
       const restValue = rest.reduce((sum, s) => sum + s[metric], 0);
       items.push({
         stat: { name: otherLabel, [metric]: restValue } as unknown as GroupStat,
@@ -86,7 +86,7 @@ export function DonutChart({ stats, metric, className }: DonutChartProps) {
   if (slices.length === 0) {
     return (
       <div className={cn("flex h-56 items-center justify-center text-xs text-muted-foreground", className)}>
-        {t("overview.provider.empty")}
+        {t("overview.provider_other_empty" as never)}
       </div>
     );
   }
@@ -136,7 +136,7 @@ export function DonutChart({ stats, metric, className }: DonutChartProps) {
               content={() => (
                 <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle">
                   <tspan x="50%" dy="-0.4em" className="fill-muted-foreground text-[10px]">
-                    {focused ? t("overview.provider.share") : t("common.total", { count: slices.length })}
+                    {focused ? t("overview.provider_share" as never) : t("common.total", { count: slices.length })}
                   </tspan>
                   <tspan x="50%" dy="1.3em" className="fill-foreground font-mono text-sm font-semibold">
                     {focused ? `${(focused.share * 100).toFixed(1)}%` : formatValue(total)}

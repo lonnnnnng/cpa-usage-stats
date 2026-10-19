@@ -53,9 +53,7 @@
     },
     "tabs": {
       "overview": "Overview",
-      "models": "Models",
-      "credentials": "Credentials",
-      "diagnostics": "Diagnostics",
+      "usage": "Usage",
       "records": "Records"
     },
     "load_failed": "Failed to load data: {{message}}",
@@ -83,7 +81,8 @@
         "center": "management center"
       },
       "source_label": "Source: {{source}}"
-    }
+    },
+    "tabs.usage": "Usage"
   },
   "overview": {
     "kpi": {
@@ -96,7 +95,6 @@
       "reasoning": "Reasoning {{value}}",
       "cache_read": "Cache read {{value}}",
       "cache_write": "Cache write {{value}}",
-      "ttft": "TTFT {{value}}",
       "priced": "{{priced}}/{{total}} models priced",
       "pricing_unavailable": "Pricing data unavailable",
       "no_cost_data": "No pricing data",
@@ -104,27 +102,14 @@
       "throughput": "Avg output throughput",
       "tps": "{{value}} t/s",
       "stream_share": "{{count}}/{{total}} streamed",
-      "percentiles": "P95 {{p95}} · P99 {{p99}}",
       "io_short": "in {{input}} / out {{output}}"
     },
     "tokens_dist": {
-      "title": "Token Distribution",
+      "title": "Token composition",
       "cache": "Cache Read",
       "input": "Input",
       "output": "Output",
       "reasoning": "Reasoning"
-    },
-    "models_chart": {
-      "title": "Top Models Distribution",
-      "tab_tokens": "Tokens",
-      "tab_requests": "Requests",
-      "tab_cost": "Cost"
-    },
-    "credentials_chart": {
-      "keys_title": "API Key Distribution",
-      "auths_title": "Upstream Credential Distribution",
-      "tab_tokens": "Tokens",
-      "tab_requests": "Requests"
     },
     "trend": {
       "hourly": "Hourly trend",
@@ -133,81 +118,23 @@
       "empty": "No trend data",
       "tab_requests": "Requests",
       "tab_tokens": "Tokens",
-      "latency_title": "Latency percentiles",
       "input_label": "Input tokens",
       "output_label": "Output tokens",
       "latency_line": "Avg {{avg}} · P95 {{p95}}",
       "requests_ok": "Succeeded",
       "failed_requests": "Failed"
     },
-    "provider": {
-      "title": "Provider distribution",
-      "empty": "No provider data",
-      "share": "Share",
-      "other": "Other"
-    },
-    "models": {
-      "title": "Model ranking",
-      "count": "{{count}} models",
-      "empty": "No statistics yet",
-      "th": {
-        "index": "#",
-        "model": "Model",
-        "provider": "Provider",
-        "requests": "Requests",
-        "tokens": "Tokens (in/out)",
-        "reasoning_cache": "Reasoning / cache r/w",
-        "price": "Price (in/out · 1M)",
-        "cost": "Est. cost",
-        "latency": "Avg latency",
-        "share": "Share"
-      },
-      "set_price": "No price (click to set)",
-      "custom_badge": "Custom",
-      "fuzzy_hint": "Fuzzy matched from {{id}}"
-    },
-    "keys": {
-      "title": "Client key usage",
-      "count": "{{count}} keys",
-      "empty": "No key data",
-      "copy_key": "Copy full key",
-      "th": {
-        "key": "API key",
-        "requests": "Requests",
-        "failed": "Failed",
-        "tokens": "Total tokens",
-        "latency": "Avg latency"
-      }
-    },
     "dropped": {
       "title": "{{count}} usage records were dropped",
       "desc": "The in-memory queue filled up, so those requests were never counted. Raise channel_size or lower batch_size / flush_interval_ms to avoid it."
     },
-    "auths": {
-      "title": "Upstream credentials",
-      "count": "{{count}} credentials",
-      "th": {
-        "auth": "Credential",
-        "requests": "Requests",
-        "failed": "Failed",
-        "tokens": "Total tokens",
-        "cache": "Cache read",
-        "latency": "Avg latency",
-        "p95": "P95 latency"
-      }
-    },
-    "sessions": {
-      "title": "Session usage",
-      "count": "{{count}} sessions",
-      "th": {
-        "session": "Session ID",
-        "requests": "Requests",
-        "tokens": "Total tokens",
-        "avg_tokens": "Avg tokens/request",
-        "cache": "Cache read",
-        "latency": "Avg latency"
-      }
-    }
+    "kpi.p95": "P95 {{value}}",
+    "models.unmatched_title": "Models without pricing",
+    "models.unmatched_desc": "{{count}} models have no matched price and are excluded from cost; click one to set a unit price",
+    "provider_other": "Other",
+    "provider_other_empty": "No provider usage",
+    "provider_share": "Share",
+    "provider_title": "Provider distribution"
   },
   "pricing": {
     "source": "Pricing source",
@@ -267,16 +194,13 @@
       "provider": "Provider",
       "tokens": "Tokens (in / out / total)",
       "cost": "Est. cost",
-      "latency": "Latency / TTFT",
-      "key": "Key / auth"
+      "latency": "Latency / TTFT"
     },
     "row": {
       "alias": "alias {{name}}",
       "upstream": "upstream {{name}}",
       "cache": "cache read {{read}} / write {{write}}",
-      "throughput": "{{value}} t/s",
-      "copy_key": "Copy full key",
-      "native_key": "Native"
+      "throughput": "{{value}} t/s"
     },
     "detail": {
       "request_id": "Request ID",
@@ -295,10 +219,6 @@
       "generate": "Generate",
       "not_generate": "Non-generate",
       "pricing_source": "Pricing source",
-      "tokens_detail": "Tokens & cost breakdown",
-      "section_ids": "Identifiers",
-      "section_route": "Routing & credentials",
-      "section_params": "Request parameters",
       "token_input": "Input",
       "token_output": "Output",
       "token_reasoning": "Reasoning",
@@ -329,18 +249,37 @@
     "title": "Management key required",
     "desc": "The management key could not be resolved automatically (no key saved in the panel, or the dashboard runs cross-origin). Enter it to continue."
   },
-  "failures": {
-    "title": "Failure diagnostics",
-    "count": "{{count}} failures",
-    "empty": "No failed requests in this range",
-    "empty_desc": "Every upstream call returned a success status.",
-    "no_type": "(unclassified)",
-    "th": {
-      "status": "Status",
-      "type": "Error type",
-      "requests": "Count",
-      "share": "Share",
-      "sample": "Sample"
-    }
+  "usage_chart": {
+    "metric_label": "Current metric",
+    "metric_tokens": "Tokens",
+    "metric_cost": "Cost",
+    "metric_requests": "Requests",
+    "metric_speed": "Speed",
+    "metric_latency": "Latency",
+    "tps": "{{value}} tokens/s",
+    "tps_short": "{{value}}/s",
+    "empty": "No usage in this range",
+    "cost_unavailable": "Pricing table is not ready for cost",
+    "dim_model": "Model",
+    "dim_provider": "Provider",
+    "dim_session": "Session",
+    "dim_auth": "Credential",
+    "dim_key": "Client key"
+  },
+  "usage_tab": {
+    "title": "Usage breakdown"
+  },
+  "heatmap": {
+    "title": "Activity heatmap",
+    "summary": "{{total}} over the last {{days}} days",
+    "metric_tokens": "Tokens",
+    "metric_requests": "Requests",
+    "metric_cost": "Cost",
+    "weekday_mon": "Mon",
+    "weekday_wed": "Wed",
+    "weekday_fri": "Fri",
+    "less": "Less",
+    "more": "More",
+    "empty": "No activity in this range"
   }
 }

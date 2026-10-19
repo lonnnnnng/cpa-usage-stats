@@ -5,7 +5,7 @@ import { DisplaySettings } from "@/components/DisplaySettings";
 import { KeyDialog } from "@/components/KeyDialog";
 import { LanguageToggle } from "@/components/language-toggle";
 import { Logo } from "@/components/logo";
-import { OverviewCredentials, OverviewDiagnostics, OverviewModels, OverviewSummary } from "@/components/OverviewTab";
+import { OverviewSummary, OverviewUsage } from "@/components/OverviewTab";
 import { PricingSource } from "@/components/PricingSource";
 import { RecordsTab } from "@/components/RecordsTab";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -24,7 +24,7 @@ import { cn } from "@/lib/utils";
 import type { OptionsResponse, RecordListResponse, RecordsFilters, SummaryData, TimeRange } from "@/types";
 
 /** 概览拆成多页签后的页签值；@/types 里的 TabKey 只有 overview/records 两态，已不适用 */
-type TabKey = "overview" | "models" | "credentials" | "diagnostics" | "records";
+type TabKey = "overview" | "usage" | "records";
 
 const PAGE_SIZE = 15;
 
@@ -250,14 +250,8 @@ export function Dashboard() {
             <TabsTrigger value="overview" className="h-6.5">
               {t("dashboard.tabs.overview")}
             </TabsTrigger>
-            <TabsTrigger value="models" className="h-6.5">
-              {t("dashboard.tabs.models")}
-            </TabsTrigger>
-            <TabsTrigger value="credentials" className="h-6.5">
-              {t("dashboard.tabs.credentials")}
-            </TabsTrigger>
-            <TabsTrigger value="diagnostics" className="h-6.5">
-              {t("dashboard.tabs.diagnostics")}
+            <TabsTrigger value="usage" className="h-6.5">
+              {t("dashboard.tabs.usage")}
             </TabsTrigger>
             <TabsTrigger value="records" className="h-6.5">
               {t("dashboard.tabs.records")}
@@ -281,16 +275,8 @@ export function Dashboard() {
           这三个页签的内容没有卡片外框（表格直接铺在页面上），
           TabsContent 基类没有上下内边距，默认只剩 Tabs 根的 gap-2，和页签栏贴得太近。
         */}
-        <TabsContent value="models" className="pt-4">
-          <OverviewModels summary={summary} loading={loading} pricing={pricing} />
-        </TabsContent>
-
-        <TabsContent value="credentials" className="pt-4">
-          <OverviewCredentials summary={summary} loading={loading} pricing={pricing} />
-        </TabsContent>
-
-        <TabsContent value="diagnostics" className="pt-4">
-          <OverviewDiagnostics summary={summary} loading={loading} pricing={pricing} />
+        <TabsContent value="usage" className="pt-4">
+          <OverviewUsage summary={summary} loading={loading} pricing={pricing} />
         </TabsContent>
 
         <TabsContent value="records">

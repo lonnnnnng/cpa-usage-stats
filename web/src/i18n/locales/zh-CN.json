@@ -53,9 +53,7 @@
     },
     "tabs": {
       "overview": "用量总览",
-      "models": "模型用量",
-      "credentials": "凭据用量",
-      "diagnostics": "诊断",
+      "usage": "用量分布",
       "records": "调用明细"
     },
     "load_failed": "数据加载失败：{{message}}",
@@ -83,7 +81,8 @@
         "center": "管理中心"
       },
       "source_label": "来源：{{source}}"
-    }
+    },
+    "tabs.usage": "用量分布"
   },
   "overview": {
     "kpi": {
@@ -96,7 +95,6 @@
       "reasoning": "思考 {{value}}",
       "cache_read": "缓存读 {{value}}",
       "cache_write": "缓存写 {{value}}",
-      "ttft": "TTFT {{value}}",
       "priced": "{{priced}}/{{total}} 个模型已匹配价格",
       "pricing_unavailable": "价格数据不可用",
       "no_cost_data": "暂无价格数据",
@@ -104,7 +102,6 @@
       "throughput": "平均输出吞吐",
       "tps": "{{value}} t/s",
       "stream_share": "{{count}}/{{total}} 为流式请求",
-      "percentiles": "P95 {{p95}} · P99 {{p99}}",
       "io_short": "入 {{input}} / 出 {{output}}"
     },
     "tokens_dist": {
@@ -114,18 +111,6 @@
       "output": "生成输出",
       "reasoning": "深度推理"
     },
-    "models_chart": {
-      "title": "Top 模型消耗与占比",
-      "tab_tokens": "按词元",
-      "tab_requests": "按请求数",
-      "tab_cost": "按费用"
-    },
-    "credentials_chart": {
-      "keys_title": "客户端 Key 消耗分布",
-      "auths_title": "上游凭据负载分布",
-      "tab_tokens": "按词元",
-      "tab_requests": "按请求数"
-    },
     "trend": {
       "hourly": "按小时走势",
       "daily": "按天走势",
@@ -133,81 +118,23 @@
       "empty": "暂无趋势数据",
       "tab_requests": "请求数",
       "tab_tokens": "词元消耗",
-      "latency_title": "延迟分位",
       "input_label": "输入词元",
       "output_label": "输出词元",
       "latency_line": "平均 {{avg}} · P95 {{p95}}",
       "requests_ok": "成功请求",
       "failed_requests": "失败请求"
     },
-    "provider": {
-      "title": "Provider 分布",
-      "empty": "暂无 Provider 数据",
-      "share": "占比",
-      "other": "其他"
-    },
-    "models": {
-      "title": "模型用量排行",
-      "count": "共 {{count}} 个模型",
-      "empty": "暂无统计数据",
-      "th": {
-        "index": "#",
-        "model": "模型",
-        "provider": "Provider",
-        "requests": "请求数",
-        "tokens": "词元（入/出）",
-        "reasoning_cache": "思考 / 缓存读写",
-        "price": "价格（入/出 · 1M）",
-        "cost": "预估成本",
-        "latency": "平均延迟",
-        "share": "占比"
-      },
-      "set_price": "未定价（点击设置）",
-      "custom_badge": "自定义",
-      "fuzzy_hint": "模糊匹配自 {{id}}"
-    },
-    "keys": {
-      "title": "客户端 Key 用量",
-      "count": "共 {{count}} 个",
-      "empty": "暂无 Key 数据",
-      "copy_key": "复制完整 Key",
-      "th": {
-        "key": "API Key",
-        "requests": "请求数",
-        "failed": "失败数",
-        "tokens": "总词元",
-        "latency": "平均延迟"
-      }
-    },
     "dropped": {
       "title": "有 {{count}} 条用量记录被丢弃",
       "desc": "内存队列已满，这部分请求没有被统计。可调大 channel_size 或减小 batch_size / flush_interval_ms 来缓解。"
     },
-    "auths": {
-      "title": "上游凭据用量",
-      "count": "共 {{count}} 个",
-      "th": {
-        "auth": "凭据",
-        "requests": "请求数",
-        "failed": "失败数",
-        "tokens": "总词元",
-        "cache": "缓存读",
-        "latency": "平均延迟",
-        "p95": "P95 延迟"
-      }
-    },
-    "sessions": {
-      "title": "会话用量",
-      "count": "共 {{count}} 个会话",
-      "th": {
-        "session": "会话 ID",
-        "requests": "请求数",
-        "tokens": "总词元",
-        "avg_tokens": "平均词元/请求",
-        "cache": "缓存读",
-        "latency": "平均延迟"
-      }
-    }
+    "kpi.p95": "P95 {{value}}",
+    "models.unmatched_title": "未匹配定价的模型",
+    "models.unmatched_desc": "共 {{count}} 个，未匹配价格的模型不参与费用统计，可点击设置单价",
+    "provider_other": "其它",
+    "provider_other_empty": "暂无渠道用量",
+    "provider_share": "占比",
+    "provider_title": "Provider 渠道分布"
   },
   "pricing": {
     "source": "价格数据源",
@@ -267,16 +194,13 @@
       "provider": "Provider",
       "tokens": "词元（入 / 出 / 总）",
       "cost": "预估成本",
-      "latency": "耗时 / TTFT",
-      "key": "Key / 认证"
+      "latency": "耗时 / TTFT"
     },
     "row": {
       "alias": "别名 {{name}}",
       "upstream": "上游 {{name}}",
       "cache": "缓存 读 {{read}} / 写 {{write}}",
-      "throughput": "{{value}} t/s",
-      "copy_key": "复制完整 Key",
-      "native_key": "原生"
+      "throughput": "{{value}} t/s"
     },
     "detail": {
       "request_id": "Request ID",
@@ -295,10 +219,6 @@
       "generate": "生成",
       "not_generate": "非生成",
       "pricing_source": "模型定价来源",
-      "tokens_detail": "词元与费用明细",
-      "section_ids": "标识",
-      "section_route": "路由与凭据",
-      "section_params": "请求参数",
       "token_input": "输入",
       "token_output": "输出",
       "token_reasoning": "思考",
@@ -329,18 +249,37 @@
     "title": "需要管理密钥",
     "desc": "未能自动读取管理密钥（面板未保存密钥，或看板与 CLIProxyAPI 跨源部署）。请输入管理密钥后重试。"
   },
-  "failures": {
-    "title": "失败诊断",
-    "count": "共 {{count}} 次失败",
-    "empty": "该范围内没有失败请求",
-    "empty_desc": "所有上游调用都返回了成功状态。",
-    "no_type": "(未识别)",
-    "th": {
-      "status": "状态码",
-      "type": "错误类型",
-      "requests": "次数",
-      "share": "占比",
-      "sample": "响应样本"
-    }
+  "usage_chart": {
+    "metric_label": "当前指标",
+    "metric_tokens": "Token",
+    "metric_cost": "费用",
+    "metric_requests": "请求",
+    "metric_speed": "速度",
+    "metric_latency": "耗时",
+    "tps": "{{value}} tokens/s",
+    "tps_short": "{{value}}/s",
+    "empty": "当前范围内没有可用的用量数据",
+    "cost_unavailable": "定价表未就绪，无法折算费用",
+    "dim_model": "模型",
+    "dim_provider": "供应商",
+    "dim_session": "会话",
+    "dim_auth": "凭据",
+    "dim_key": "客户端 Key"
+  },
+  "usage_tab": {
+    "title": "用量分布"
+  },
+  "heatmap": {
+    "title": "活动热力图",
+    "summary": "近 {{days}} 天共 {{total}}",
+    "metric_tokens": "Token",
+    "metric_requests": "请求",
+    "metric_cost": "费用",
+    "weekday_mon": "一",
+    "weekday_wed": "三",
+    "weekday_fri": "五",
+    "less": "少",
+    "more": "多",
+    "empty": "当前范围内没有可用的活动数据"
   }
 }
