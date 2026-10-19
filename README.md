@@ -1,12 +1,37 @@
 # cpa-usage-stats
 
-CLIProxyAPI（CPA 8.0+）用量统计插件：通过 v8 管理 API（`usage_plugin`）接收请求用量并持久化到 SQLite，内置 Web 看板。
+[English](README.en.md)
 
-## 安装
+CLIProxyAPI（CPA 8.0+）用量统计插件：通过 usage 插件接口采集请求与 Token 用量，异步写入 SQLite，并提供内嵌看板。
 
-### 方式一：从插件商店安装
+## 项目简介
 
-在 CPA 的 `config.yaml` 中添加本插件仓库作为商店源：
+- 采集请求、Token、延迟、失败等用量数据，按批异步写入 SQLite。
+- 内置看板：概览、模型、凭据、诊断和调用明细。
+- 支持数据保留天数、模型排除、批量写入参数等配置。
+
+## 开发环境配置
+
+前置要求：
+
+- Go 1.25+（需 CGO，装有 GCC 或 Clang）
+- Node.js 24+ / pnpm 12+
+
+```bash
+./build.sh                              # 打包前端并编译动态库
+go test ./...                           # 后端测试
+cd web && pnpm install && pnpm run dev  # 单独调试前端
+```
+
+前端开发时资源页默认同源调用插件接口，用 `?api_base=http://127.0.0.1:8317` 指定正在运行的 CPA 地址。
+
+前端技术栈：React 19、TypeScript、Vite、Tailwind CSS v4、shadcn、Recharts、i18next。
+
+## 构建与部署
+
+### 插件商店安装
+
+插件收录到官方插件商店后，在管理中心搜索 `CPA Usage Stats` 安装。也可以在 CPA 中添加本仓库的商店源：
 
 ```yaml
 plugins:
@@ -16,20 +41,16 @@ plugins:
     - "https://raw.githubusercontent.com/tom2almighty/cpa-usage-stats/main/plugin-store/registry.json"
 ```
 
-重启或热重载 CPA 后，在管理中心的插件商店搜索 `CPA Usage Stats` 一键安装即可。
+### 手动安装
 
-### 方式二：手动放置
-
-从 [Releases](https://github.com/tom2almighty/cpa-usage-stats/releases) 下载对应平台的压缩包，解压得到 `cpa-usage-stats.so`（Linux）/ `.dylib`（macOS）/ `.dll`（Windows），放入 CPA 的 `plugins` 目录，Docker 部署时，把动态库放进映射的插件目录。
+从 [Releases](https://github.com/tom2almighty/cpa-usage-stats/releases) 下载对应平台的压缩包，解压得到 `cpa-usage-stats.so`（Linux）/ `.dylib`（macOS）/ `.dll`（Windows），放入 CPA 的 `plugins` 目录。Docker 部署时，把动态库放进映射的插件目录。
 
 ```bash
 mkdir -p /path/to/cliproxyapi/plugins
 cp cpa-usage-stats.so /path/to/cliproxyapi/plugins/
 ```
 
-## 配置
-
-在 CPA 的 `config.yaml` 中启用并调整参数：
+### 配置
 
 ```yaml
 plugins:
@@ -49,50 +70,42 @@ plugins:
       dashboard_title: "用量统计看板"              # 管理中心菜单名称
 ```
 
-打开看板：在管理中心插件列表点击「用量统计看板」，或直接访问：
+### 本地打包
+
+```bash
+./scripts/package-release.sh 0.1.7
+```
+
+产物写入 `release-dist/`，包含平台压缩包与 `checksums.txt`。
+
+### 使用
+
+在管理中心插件列表点击「用量统计看板」，或直接访问：
 
 ```text
 http://127.0.0.1:8317/v0/resource/plugins/cpa-usage-stats/dashboard
 ```
 
 - 看板通过插件管理接口（`/v0/management/plugins/cpa-usage-stats/*`，需管理密钥）读取数据。
-- 密钥按以下顺序解析：本插件保存的（`localStorage`）→ cpa-dashboard 面板保存的 → 官方管理中心保存的。
-- 都读不到时看板照常渲染但**不发任何请求**，点击右上角「管理密钥」输入即可。
+- 管理密钥按以下顺序解析：本插件保存的（`localStorage`）→ cpa-dashboard 面板保存的 → 官方管理中心保存的。
+- 都读不到时看板照常渲染但不发请求，点击右上角「管理密钥」输入即可。
+- CPA 对同一 IP 连续 5 次认证失败会临时封禁约 30 分钟，因此缺少密钥时看板不会尝试请求。
 
-> CPA 对同一 IP 连续 5 次认证失败会临时封禁约 30 分钟，因此缺少密钥时看板不会尝试请求。
+### Docker
 
-## 开发
-
-- 前端开发时资源页默认同源调用插件接口，用 `?api_base=http://127.0.0.1:8317` 指定正在运行的 CPA 地址。
-- 推送 `vx.y.z` 标签触发 GitHub Actions 构建跨平台产物。
-- 本地可用 `./scripts/package-release.sh 1.0.0` 生成发布包。
-
-**前置要求**
-
-- Go 1.25+（需 CGO，装有 GCC 或 Clang）
-- Node.js 24+ / pnpm 12+
-
-```bash
-./build.sh                     # 打包前端并编译 CGO 动态库
-go test ./...                  # 后端测试
-cd web && pnpm install && pnpm run dev   # 单独调试前端
+```yaml
+services:
+  cli-proxy-api:
+    image: ghcr.io/router-for-me/cliproxyapi:latest
+    volumes:
+      - ./plugins:/app/plugins
+      - ./config.yaml:/app/config.yaml
+    ports:
+      - "8317:8317"
 ```
 
-**前端技术栈**
+把动态库放到 `./plugins` 后重启容器即可。
 
-- React 19
-- TypeScript
-- Vite
-- Tailwind CSS v4
-- shadcn
-- Recharts
-- i18next
-
-## 说明
-
-- 需要 CLIProxyAPI v8 管理 API（固定声明 RPC schema 6），不兼容旧版本。
-- 成本数据来自 [models.dev](https://github.com/anomalyco/models.dev) 仅供参考。
-
-## LICENSE
+## 开源许可证
 
 [AGPL-3.0](LICENSE)
