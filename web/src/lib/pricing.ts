@@ -304,7 +304,7 @@ function pickPrice(
 }
 
 /** Resolves a record/group to an exact, fuzzy, or custom price entry. */
-function priceFor(
+export function priceFor(
   table: PricingTable | null,
   ref: { model?: string; responseModel?: string; alias?: string; provider?: string },
 ): PriceMatch | null {
