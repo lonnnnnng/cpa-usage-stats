@@ -73,7 +73,7 @@ export function DimensionBreakdown({ stats, dimension, metric, pricing, classNam
 
   if (rows.length === 0) {
     return (
-      <div className={cn("flex h-80 items-center justify-center text-xs text-muted-foreground", className)}>
+      <div className={cn("flex h-88 items-center justify-center text-xs text-muted-foreground", className)}>
         {metric === "cost" && !pricing.table ? t("usage_chart.cost_unavailable") : t("usage_chart.empty")}
       </div>
     );
@@ -82,7 +82,7 @@ export function DimensionBreakdown({ stats, dimension, metric, pricing, classNam
   const max = rows[0].value;
 
   return (
-    <div className={cn("max-h-80 space-y-3 overflow-y-auto pr-1", className)}>
+    <div className={cn("h-88 space-y-3 overflow-y-auto pr-1", className)}>
       {rows.map(({ stat, cost, value, fill }) => (
         <div key={`${stat.name}-${stat.secondary ?? ""}`} className="space-y-1">
           <div className="flex items-baseline justify-between gap-3">

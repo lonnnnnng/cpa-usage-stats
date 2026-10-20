@@ -238,7 +238,7 @@ export function OverviewSummary({ summary, loading, pricing }: OverviewSectionPr
           </CardHeader>
           <CardContent className="pt-2">
             {loading ? (
-              <Skeleton className="h-80 w-full" />
+              <Skeleton className="h-88 w-full" />
             ) : (
               <UsageTimeChart summary={summary} metric={metric} pricing={pricing} />
             )}
@@ -263,7 +263,7 @@ export function OverviewSummary({ summary, loading, pricing }: OverviewSectionPr
           </CardHeader>
           <CardContent className="pt-2">
             {loading ? (
-              <Skeleton className="h-80 w-full" />
+              <Skeleton className="h-88 w-full" />
             ) : (
               <DimensionBreakdown
                 stats={{

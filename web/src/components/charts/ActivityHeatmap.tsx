@@ -10,8 +10,8 @@ import type { SummaryData } from "@/types";
 export type HeatmapMetric = "tokens" | "requests" | "cost";
 
 const METRICS: HeatmapMetric[] = ["tokens", "requests", "cost"];
-// 一年 52 周，按容器宽度等分列，避免宽屏下整块只挤在左侧
-const WEEKS = 52;
+// 26 周：按容器宽度等分列仍能铺满，同时让每个热力点有足够面积
+const WEEKS = 26;
 const DAYS = 7;
 const DAY_MS = 86_400_000;
 
@@ -204,7 +204,7 @@ export function ActivityHeatmap({
           <div className="flex items-center justify-end gap-1 text-[10px] text-muted-foreground">
             <span>{t("heatmap.less")}</span>
             {LEVEL_CLASS.map((level) => (
-              <span key={level} className={cn("size-3 rounded-xs", level)} />
+              <span key={level} className={cn("size-3.5 rounded-xs", level)} />
             ))}
             <span>{t("heatmap.more")}</span>
           </div>

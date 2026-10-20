@@ -112,7 +112,7 @@ export function UsageTimeChart({ summary, metric, pricing, className }: UsageTim
 
   if (metric === "cost" && costRate === null) {
     return (
-      <div className={cn("flex h-80 w-full items-center justify-center text-xs text-muted-foreground", className)}>
+      <div className={cn("flex h-88 w-full items-center justify-center text-xs text-muted-foreground", className)}>
         {pricing.table ? t("overview.kpi.no_cost_data") : t("usage_chart.cost_unavailable")}
       </div>
     );
@@ -120,7 +120,7 @@ export function UsageTimeChart({ summary, metric, pricing, className }: UsageTim
 
   if (data.length === 0) {
     return (
-      <div className={cn("flex h-80 w-full items-center justify-center text-xs text-muted-foreground", className)}>
+      <div className={cn("flex h-88 w-full items-center justify-center text-xs text-muted-foreground", className)}>
         {t("overview.trend.empty")}
       </div>
     );
@@ -143,8 +143,8 @@ export function UsageTimeChart({ summary, metric, pricing, className }: UsageTim
   };
 
   return (
-    <div className={cn("w-full space-y-1", className)}>
-      <ChartContainer config={config} className="aspect-auto h-80 w-full">
+    <div className={cn("flex h-88 w-full flex-col gap-1", className)}>
+      <ChartContainer config={config} className="aspect-auto h-80 w-full shrink-0">
         <BarChart data={data} margin={{ left: 4, right: 4, top: 8, bottom: 0 }}>
           <CartesianGrid vertical={false} strokeDasharray="3 3" />
           <XAxis
@@ -198,16 +198,15 @@ export function UsageTimeChart({ summary, metric, pricing, className }: UsageTim
         </BarChart>
       </ChartContainer>
 
-      {activeKeys.length > 1 && (
-        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-          {activeKeys.map((key) => (
-            <span key={key} className="inline-flex items-center gap-1.5">
-              <span className="size-2 shrink-0 rounded-xs" style={{ background: SERIES[key].color }} />
-              {labels[key]}
-            </span>
-          ))}
-        </div>
-      )}
+      {/* 单序列也保留图例行，保证切换指标时图表高度不变化 */}
+      <div className="flex h-6 shrink-0 flex-wrap items-center justify-center gap-x-4 gap-y-1 overflow-hidden text-xs text-muted-foreground">
+        {activeKeys.map((key) => (
+          <span key={key} className="inline-flex items-center gap-1.5">
+            <span className="size-2 shrink-0 rounded-xs" style={{ background: SERIES[key].color }} />
+            {labels[key]}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
