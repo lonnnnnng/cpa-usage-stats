@@ -399,6 +399,83 @@ export function priceFor(
   return null;
 }
 
+// ---------- Similar Model Suggestions ----------
+
+/** 归一化：小写、去掉渠道前缀，分隔符统一成 '-'。 */
+function normalizeName(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/^.*\//, "")
+    .replace(/[._:\s]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function nameTokens(value: string): string[] {
+  const normalized = normalizeName(value);
+  return normalized ? normalized.split("-") : [];
+}
+
+/** 词元重合度 + 共同前缀长度，额外后缀（推理强度、日期等）不会拉低太多分。 */
+function nameSimilarity(a: string[], b: string[]): number {
+  const left = new Set(a);
+  const right = new Set(b);
+  let shared = 0;
+  for (const token of left) if (right.has(token)) shared += 1;
+  let prefix = 0;
+  while (prefix < a.length && prefix < b.length && a[prefix] === b[prefix]) prefix += 1;
+  return shared / (left.size + right.size - shared) + Math.min(prefix, 3) * 0.15;
+}
+
+export type PriceSuggestion = {
+  /** models.dev 中的模型名，仅用于展示。 */
+  modelId: string;
+  price: ModelPrice;
+};
+
+const SUGGESTION_COUNT = 4;
+const SUGGESTION_MIN_SCORE = 0.45;
+
+/** 为缺价模型挑几个目录里最相近的模型，供用户点选后复用其单价。 */
+export function suggestPrices(
+  table: PricingTable | null,
+  ref: { model: string; provider?: string },
+  limit = SUGGESTION_COUNT,
+): PriceSuggestion[] {
+  if (!table) return [];
+  const target = nameTokens(ref.model);
+  if (target.length === 0) return [];
+
+  const hints = providerCandidates(ref.provider);
+  const best = new Map<string, { modelId: string; price: ModelPrice; score: number; hinted: boolean }>();
+
+  for (const [modelId, providers] of Object.entries(table.models)) {
+    const picked = pickPrice(providers, hints);
+    if (!picked) continue;
+    const score = nameSimilarity(target, nameTokens(modelId));
+    if (score < SUGGESTION_MIN_SCORE) continue;
+
+    const hinted = hints.includes(picked.providerId);
+    const key = normalizeName(modelId);
+    const current = best.get(key);
+    // 同一模型的不同渠道别名只保留一条：优先本渠道价，其次更短的 ID。
+    if (
+      !current ||
+      (hinted && !current.hinted) ||
+      (hinted === current.hinted &&
+        (score > current.score || (score === current.score && modelId.length < current.modelId.length)))
+    ) {
+      best.set(key, { modelId, price: picked.price, score, hinted });
+    }
+  }
+
+  return [...best.values()]
+    .sort((a, b) => b.score - a.score || a.modelId.localeCompare(b.modelId))
+    .slice(0, limit)
+    .map(({ modelId, price }) => ({ modelId, price }));
+}
+
 // ---------- Cost Calculations ----------
 
 function tokenSemantics(provider: string | undefined): TokenSemantics {

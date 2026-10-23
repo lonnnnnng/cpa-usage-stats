@@ -165,6 +165,7 @@
       "placeholder_required": "e.g. {{value}}",
       "placeholder_optional": "Leave empty to skip",
       "reasoning_placeholder": "Defaults to the output price",
+      "similar": "Similar models (click to fill the price)",
       "invalid": "Enter valid non-negative input and output prices",
       "remove": "Remove custom price"
     }

@@ -11,12 +11,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useI18n } from "@/i18n/context";
-import { type ModelPrice, removeCustomPrice, setCustomPrice } from "@/lib/pricing";
+import { type ModelPrice, type PriceSuggestion, removeCustomPrice, setCustomPrice } from "@/lib/pricing";
 
 interface CustomPriceModalProps {
   open: boolean;
   modelName: string;
   currentPrice?: ModelPrice | null;
+  /** 目录中最相近的模型，点选后填入其单价，仍可手动修改 */
+  suggestions?: PriceSuggestion[];
   isCustom?: boolean;
   onClose: () => void;
   /** 价格写入本地后回调，用于让看板重新匹配成本 */
@@ -60,6 +62,7 @@ export function CustomPriceModal({
   open,
   modelName,
   currentPrice,
+  suggestions = [],
   isCustom = false,
   onClose,
   onSaved,
@@ -81,6 +84,16 @@ export function CustomPriceModal({
     setReasoning(currentPrice?.reasoning !== undefined ? String(currentPrice.reasoning) : "");
     setError("");
   }, [open, currentPrice]);
+
+  /** 点选相近模型只是填入单价，保存前仍可手动调整。 */
+  const applySuggestion = (price: ModelPrice) => {
+    setInput(String(price.input));
+    setOutput(String(price.output));
+    setCacheRead(price.cacheRead !== undefined ? String(price.cacheRead) : "");
+    setCacheWrite(price.cacheWrite !== undefined ? String(price.cacheWrite) : "");
+    setReasoning(price.reasoning !== undefined ? String(price.reasoning) : "");
+    setError("");
+  };
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -113,6 +126,27 @@ export function CustomPriceModal({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {suggestions.length > 0 && (
+            <div className="space-y-1.5">
+              <Label className="text-muted-foreground">{t("pricing.dialog.similar")}</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {suggestions.map((item) => (
+                  <Button
+                    key={item.modelId}
+                    type="button"
+                    variant="outline"
+                    size="xs"
+                    className="max-w-full font-mono"
+                    title={item.modelId}
+                    onClick={() => applySuggestion(item.price)}
+                  >
+                    <span className="truncate">{item.modelId}</span>
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <PriceField
               id="price-input"

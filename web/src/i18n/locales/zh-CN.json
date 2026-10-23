@@ -165,6 +165,7 @@
       "placeholder_required": "例如 {{value}}",
       "placeholder_optional": "留空则不单独计价",
       "reasoning_placeholder": "缺省等于输出单价",
+      "similar": "相近模型（点击填入单价）",
       "invalid": "请输入有效的非负输入与输出单价",
       "remove": "清除自定义价格"
     }

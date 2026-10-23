@@ -36,7 +36,7 @@ import {
   type UsageDimension,
   type UsageMetric,
 } from "@/lib/metrics";
-import { groupCostDetails, type ModelPrice, priceFor, totalCost } from "@/lib/pricing";
+import { groupCostDetails, type ModelPrice, type PriceSuggestion, suggestPrices, totalCost } from "@/lib/pricing";
 import { formatDuration, formatPercent } from "@/lib/utils";
 import type { SummaryData } from "@/types";
 
@@ -339,9 +339,12 @@ export function OverviewSummary({ summary, loading, pricing }: OverviewSectionPr
 /** 未匹配定价的模型：模型表移除后保留唯一的改价入口，成本指标才能被修正。 */
 function UnmatchedPricing({ models, pricing }: { models: SummaryData["model_stats"]; pricing: PricingState }) {
   const { t } = useI18n();
-  const [editing, setEditing] = useState<{ modelName: string; price: ModelPrice | null; isCustom: boolean } | null>(
-    null,
-  );
+  const [editing, setEditing] = useState<{
+    modelName: string;
+    price: ModelPrice | null;
+    suggestions: PriceSuggestion[];
+    isCustom: boolean;
+  } | null>(null);
   if (!pricing.table) return null;
 
   const unmatched = models.filter((model) => !groupCostDetails(pricing.table, model));
@@ -370,9 +373,8 @@ function UnmatchedPricing({ models, pricing }: { models: SummaryData["model_stat
               onClick={() =>
                 setEditing({
                   modelName: model.name,
-                  price: pricing.table
-                    ? (priceFor(pricing.table, { model: model.name, provider: model.secondary ?? "" })?.price ?? null)
-                    : null,
+                  price: null,
+                  suggestions: suggestPrices(pricing.table, { model: model.name, provider: model.secondary }),
                   isCustom: false,
                 })
               }
@@ -387,6 +389,7 @@ function UnmatchedPricing({ models, pricing }: { models: SummaryData["model_stat
           open
           modelName={editing.modelName}
           currentPrice={editing.price}
+          suggestions={editing.suggestions}
           isCustom={editing.isCustom}
           onClose={() => setEditing(null)}
           onSaved={() => {
