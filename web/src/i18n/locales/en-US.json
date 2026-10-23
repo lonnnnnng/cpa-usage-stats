@@ -210,7 +210,7 @@
       "auth_source": "Access Source",
       "native_key": "CPA Native Config Key",
       "reasoning_effort": "Reasoning effort",
-      "service_tier": "Service tier (request → response)",
+      "service_tier": "Service tier (request → effective → response)",
       "mode": "Mode & flags",
       "stream": "Stream",
       "non_stream": "Non-stream",

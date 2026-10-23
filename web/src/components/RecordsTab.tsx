@@ -172,9 +172,9 @@ function DetailRow({ record, cost }: { record: StoredRecord; cost: RecordCost | 
     {
       label: t("records.detail.service_tier"),
       value:
-        record.service_tier || record.response_service_tier
-          ? `${record.service_tier || "-"} → ${record.response_service_tier || "-"}`
-          : "-",
+        [record.service_tier, record.effective_service_tier, record.response_service_tier]
+          .filter(Boolean)
+          .join(" → ") || "-",
     },
     {
       label: t("records.detail.mode"),

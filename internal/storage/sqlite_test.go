@@ -291,26 +291,27 @@ func TestV8FieldsRoundTrip(t *testing.T) {
 	defer store.Close()
 
 	in := model.UsageRecord{
-		RequestID:           "req-8",
-		TraceID:             "ab12cd34",
-		SessionID:           "sess-8",
-		Provider:            "codex",
-		BaseURL:             "https://upstream.example.com",
-		Model:               "gpt-5",
-		ResponseModel:       "gpt-5.2",
-		Alias:               "my-gpt",
-		APIKey:              "sk-v8",
-		AuthID:              "auth-8",
-		AuthIndex:           "3",
-		AuthType:            "oauth",
-		Source:              "openai",
-		ReasoningEffort:     "medium",
-		ServiceTier:         "default",
-		ResponseServiceTier: "priority",
-		Generate:            true,
-		Stream:              true,
-		RequestedAt:         time.Now(),
-		Detail:              model.UsageDetail{InputTokens: 10, OutputTokens: 5, ReasoningTokens: 7, CachedTokens: 9, CacheReadTokens: 8, CacheCreationTokens: 2, TotalTokens: 15},
+		RequestID:            "req-8",
+		TraceID:              "ab12cd34",
+		SessionID:            "sess-8",
+		Provider:             "codex",
+		BaseURL:              "https://upstream.example.com",
+		Model:                "gpt-5",
+		ResponseModel:        "gpt-5.2",
+		Alias:                "my-gpt",
+		APIKey:               "sk-v8",
+		AuthID:               "auth-8",
+		AuthIndex:            "3",
+		AuthType:             "oauth",
+		Source:               "openai",
+		ReasoningEffort:      "medium",
+		ServiceTier:          "default",
+		EffectiveServiceTier: "priority",
+		ResponseServiceTier:  "priority",
+		Generate:             true,
+		Stream:               true,
+		RequestedAt:          time.Now(),
+		Detail:               model.UsageDetail{InputTokens: 10, OutputTokens: 5, ReasoningTokens: 7, CachedTokens: 9, CacheReadTokens: 8, CacheCreationTokens: 2, TotalTokens: 15},
 	}
 	if err := store.InsertBatch([]model.UsageRecord{in}); err != nil {
 		t.Fatalf("InsertBatch: %v", err)
@@ -326,7 +327,8 @@ func TestV8FieldsRoundTrip(t *testing.T) {
 	got := list.Items[0]
 	if got.SessionID != in.SessionID || got.ResponseModel != in.ResponseModel || got.BaseURL != in.BaseURL ||
 		got.AuthIndex != in.AuthIndex || got.ReasoningEffort != in.ReasoningEffort ||
-		got.ServiceTier != in.ServiceTier || got.ResponseServiceTier != in.ResponseServiceTier ||
+		got.ServiceTier != in.ServiceTier || got.EffectiveServiceTier != in.EffectiveServiceTier ||
+		got.ResponseServiceTier != in.ResponseServiceTier ||
 		!got.Generate || !got.Stream ||
 		got.CacheReadTokens != 8 || got.CacheCreationTokens != 2 || got.ReasoningTokens != 7 {
 		t.Errorf("v8 fields round trip mismatch: %+v", got)

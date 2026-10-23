@@ -88,6 +88,7 @@ export interface StoredRecord {
   source: string;
   reasoning_effort: string;
   service_tier: string;
+  effective_service_tier: string;
   response_service_tier: string;
   stream: boolean;
   generate: boolean;

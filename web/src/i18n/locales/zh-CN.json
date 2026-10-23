@@ -210,7 +210,7 @@
       "auth_source": "密钥来源",
       "native_key": "CPA 原生配置密钥",
       "reasoning_effort": "推理力度",
-      "service_tier": "Service Tier（请求 → 响应）",
+      "service_tier": "Service Tier（请求 → 实际发送 → 响应）",
       "mode": "模式与标记",
       "stream": "流式",
       "non_stream": "非流式",

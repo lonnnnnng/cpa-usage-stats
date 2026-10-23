@@ -171,6 +171,7 @@ var tableColumns = []struct{ name, ddl string }{
 	{"source", "TEXT"},
 	{"reasoning_effort", "TEXT"},
 	{"service_tier", "TEXT"},
+	{"effective_service_tier", "TEXT"},
 	{"response_service_tier", "TEXT"},
 	{"stream", "INTEGER NOT NULL DEFAULT 0"},
 	{"generate", "INTEGER NOT NULL DEFAULT 1"},
@@ -295,12 +296,12 @@ func (s *Storage) InsertBatch(records []model.UsageRecord) error {
 			request_id, trace_id, session_id, parent_session_id, provider, base_url,
 			executor_type, model, response_model, alias, api_key, is_native_key, access_provider,
 			auth_id, auth_index, auth_type, source,
-			reasoning_effort, service_tier, response_service_tier,
+			reasoning_effort, service_tier, effective_service_tier, response_service_tier,
 			stream, generate, requested_at, latency_ms, ttft_ms,
 			failed, status_code, error_type, failure_body, response_headers,
 			input_tokens, output_tokens, reasoning_tokens,
 			cached_tokens, cache_read_tokens, cache_creation_tokens, total_tokens
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`)
 	if err != nil {
 		return fmt.Errorf("prepare insert: %w", err)
@@ -343,6 +344,7 @@ func (s *Storage) InsertBatch(records []model.UsageRecord) error {
 			r.Source,
 			r.ReasoningEffort,
 			r.ServiceTier,
+			r.EffectiveServiceTier,
 			r.ResponseServiceTier,
 			r.Stream,
 			r.Generate,
@@ -709,7 +711,7 @@ func (s *Storage) GetRecords(filter model.UsageFilter) (*model.RecordListRespons
 			COALESCE(model, ''), COALESCE(response_model, ''), COALESCE(alias, ''), COALESCE(api_key, ''),
 			COALESCE(is_native_key, 0), COALESCE(access_provider, ''),
 			COALESCE(auth_id, ''), COALESCE(auth_index, ''), COALESCE(auth_type, ''), COALESCE(source, ''),
-			COALESCE(reasoning_effort, ''), COALESCE(service_tier, ''), COALESCE(response_service_tier, ''),
+			COALESCE(reasoning_effort, ''), COALESCE(service_tier, ''), COALESCE(effective_service_tier, ''), COALESCE(response_service_tier, ''),
 			stream, generate, requested_at, latency_ms, ttft_ms,
 			failed, status_code, COALESCE(error_type, ''), COALESCE(failure_body, ''), COALESCE(response_headers, ''),
 			input_tokens, output_tokens, reasoning_tokens,
@@ -749,6 +751,7 @@ func (s *Storage) GetRecords(filter model.UsageFilter) (*model.RecordListRespons
 			&r.Source,
 			&r.ReasoningEffort,
 			&r.ServiceTier,
+			&r.EffectiveServiceTier,
 			&r.ResponseServiceTier,
 			&r.Stream,
 			&r.Generate,
