@@ -141,6 +141,17 @@
     "loading": "模型价格更新中…",
     "failed": "价格获取失败：{{message}}",
     "refresh_title": "从 models.dev 重新拉取最新模型价格",
+    "manage": "价格",
+    "reset": {
+      "action": "重置价格匹配",
+      "title": "重置价格匹配",
+      "desc": "价格匹配始终按当前目录实时计算，重置只会清除浏览器本地保存的自定义价。",
+      "redundant": "清理冗余覆盖",
+      "redundant_desc": "目录里已有同名模型的 {{count}} 条自定义价会被删除，其余保留。",
+      "all": "清空全部自定义价",
+      "all_desc": "目录里没有的模型也会一并清除，共 {{count}} 条。",
+      "done": "已清理 {{count}} 条自定义价"
+    },
     "cost_is_estimate": "成本按模型列表价估算，仅作参考",
     "match": {
       "custom": "自定义单价",

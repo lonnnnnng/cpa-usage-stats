@@ -1,8 +1,17 @@
-import { RefreshCw, Sparkles } from "lucide-react";
-import { useMemo } from "react";
+import { ChevronDown, RefreshCw, RotateCcw, Sparkles } from "lucide-react";
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
+import { PriceResetDialog } from "@/components/PriceResetDialog";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import type { PricingState } from "@/hooks/use-pricing";
 import { useI18n } from "@/i18n/context";
+import { listCustomPrices } from "@/lib/pricing";
 
 /**
  * 价格来源说明。成本数字是按 models.dev 列表价折算的估算值，
@@ -10,7 +19,8 @@ import { useI18n } from "@/i18n/context";
  */
 export function PricingSource({ pricing }: { pricing: PricingState }) {
   const { t } = useI18n();
-  const { table, loading, error, refresh } = pricing;
+  const { table, loading, error, refresh, reload } = pricing;
+  const [resetOpen, setResetOpen] = useState(false);
 
   const updatedAt = useMemo(
     () =>
@@ -23,6 +33,9 @@ export function PricingSource({ pricing }: { pricing: PricingState }) {
         : "",
     [table],
   );
+
+  // 自定义价存在 localStorage，改动后由 reload() 触发重渲染，这里直接读即可。
+  const customCount = Object.keys(listCustomPrices()).length;
 
   return (
     <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
@@ -37,17 +50,45 @@ export function PricingSource({ pricing }: { pricing: PricingState }) {
           {updatedAt && ` · ${updatedAt}`}
         </span>
       )}
-      <Button
-        variant="ghost"
-        size="xs"
-        onClick={refresh}
-        disabled={loading}
-        title={t("pricing.refresh_title")}
-        className="gap-1 text-muted-foreground hover:text-foreground"
-      >
-        <RefreshCw className={loading ? "animate-spin" : undefined} />
-        {t("pricing.fetch")}
-      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="xs"
+              disabled={loading}
+              className="gap-1 text-muted-foreground hover:text-foreground"
+            />
+          }
+        >
+          <RefreshCw className={loading ? "animate-spin" : undefined} />
+          {t("pricing.manage")}
+          <ChevronDown className="text-muted-foreground" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-44">
+          <DropdownMenuItem onClick={refresh} disabled={loading}>
+            <RefreshCw />
+            {t("pricing.fetch")}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setResetOpen(true)}>
+            <RotateCcw />
+            {t("pricing.reset.action")}
+            {customCount > 0 && (
+              <span className="ml-auto font-mono text-xs tabular-nums text-muted-foreground">{customCount}</span>
+            )}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <PriceResetDialog
+        open={resetOpen}
+        table={table}
+        onClose={() => setResetOpen(false)}
+        onDone={(removed) => {
+          reload();
+          toast.success(t("pricing.reset.done", { count: removed }));
+        }}
+      />
     </div>
   );
 }

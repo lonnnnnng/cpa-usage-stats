@@ -141,6 +141,17 @@
     "loading": "Updating model prices…",
     "failed": "Failed to fetch prices: {{message}}",
     "refresh_title": "Re-fetch the latest model prices from models.dev",
+    "manage": "Pricing",
+    "reset": {
+      "action": "Reset price matching",
+      "title": "Reset price matching",
+      "desc": "Matching is always derived from the current catalog. Resetting only removes custom prices saved in this browser.",
+      "redundant": "Remove redundant overrides",
+      "redundant_desc": "Custom prices whose model exists in the catalog are deleted ({{count}}); the rest are kept.",
+      "all": "Clear all custom prices",
+      "all_desc": "Also removes models missing from the catalog, {{count}} in total.",
+      "done": "Removed {{count}} custom prices"
+    },
     "cost_is_estimate": "Costs are estimated from list prices and are indicative only",
     "match": {
       "custom": "Custom price",

@@ -168,6 +168,41 @@ export function removeCustomPrice(modelName: string): void {
   }
 }
 
+/** 当前浏览器保存的自定义价，key 为小写模型名。 */
+export function listCustomPrices(): Record<string, ModelPrice> {
+  return getCustomPrices();
+}
+
+/**
+ * 目录里已有同名模型、可以精确命中的自定义价。
+ * 这些覆盖已经没用了，重置匹配时优先清掉，其余（目录没有的）保留。
+ */
+export function redundantCustomPriceKeys(table: PricingTable | null): string[] {
+  if (!table) return [];
+  return Object.keys(getCustomPrices()).filter((key) => table.models[key] !== undefined);
+}
+
+/** 批量删除自定义价；不传 keys 时清空全部。返回实际删除条数。 */
+export function removeCustomPrices(keys?: string[]): number {
+  const current = getCustomPrices();
+  const targets = keys ?? Object.keys(current);
+  let removed = 0;
+  for (const key of targets) {
+    const norm = key.trim().toLowerCase();
+    if (norm in current) {
+      delete current[norm];
+      removed += 1;
+    }
+  }
+  if (removed === 0) return 0;
+  try {
+    localStorage.setItem(CUSTOM_PRICING_KEY, JSON.stringify(current));
+  } catch {
+    // Storage unavailable
+  }
+  return removed;
+}
+
 // ---------- models.dev Catalog ----------
 
 /** Reduces the models.dev catalog to the price map the dashboard needs. */
