@@ -263,7 +263,18 @@ export function OverviewSummary({ summary, loading, pricing }: OverviewSectionPr
           </CardHeader>
           <CardContent className="pt-2">
             {loading ? (
-              <Skeleton className="h-88 w-full" />
+              <div className="space-y-3">
+                {["one", "two", "three", "four", "five"].map((row) => (
+                  <div key={row} className="space-y-1">
+                    <div className="flex items-center justify-between gap-3">
+                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="h-4 w-12" />
+                    </div>
+                    <Skeleton className="h-1.5 w-full" />
+                    <Skeleton className="h-3 w-40" />
+                  </div>
+                ))}
+              </div>
             ) : (
               <DimensionBreakdown
                 stats={{

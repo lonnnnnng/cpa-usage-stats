@@ -6,12 +6,11 @@ import { costPerToken, groupCostDetails } from "@/lib/pricing";
 import { cn, displayAuthName, formatDuration, maskApiKey } from "@/lib/utils";
 import type { GroupStat } from "@/types";
 
-const VISIBLE_ROWS = 12;
-const SESSION_ROWS = 5;
+const VISIBLE_ROWS = 5;
 
+/** 排名越高颜色越深：chart-1..5 是同一色相的 5 级深度。 */
 function barColor(index: number): string {
-  const token = `var(--chart-${(index % 5) + 1})`;
-  return index < 5 ? token : `color-mix(in oklab, ${token} 60%, transparent)`;
+  return `var(--chart-${Math.max(1, 5 - index)})`;
 }
 
 function shortLabel(dimension: UsageDimension, stat: GroupStat): string {
@@ -45,7 +44,6 @@ export function DimensionBreakdown({ stats, dimension, metric, pricing, classNam
   const { formatNumber, formatTokens, formatCost } = useFormat();
 
   const costRate = costPerToken(pricing.table, stats.model ?? []);
-  const limit = dimension === "session" ? SESSION_ROWS : VISIBLE_ROWS;
 
   const rows = (stats[dimension] ?? [])
     .map((stat) => {
@@ -60,7 +58,7 @@ export function DimensionBreakdown({ stats, dimension, metric, pricing, classNam
     })
     .filter((row) => row.value > 0)
     .sort((a, b) => b.value - a.value)
-    .slice(0, limit)
+    .slice(0, VISIBLE_ROWS)
     .map((row, index) => ({ ...row, fill: barColor(index) }));
 
   const formatValue = (value: number) => {
@@ -73,7 +71,7 @@ export function DimensionBreakdown({ stats, dimension, metric, pricing, classNam
 
   if (rows.length === 0) {
     return (
-      <div className={cn("flex h-88 items-center justify-center text-xs text-muted-foreground", className)}>
+      <div className={cn("flex items-center justify-center py-8 text-xs text-muted-foreground", className)}>
         {metric === "cost" && !pricing.table ? t("usage_chart.cost_unavailable") : t("usage_chart.empty")}
       </div>
     );
@@ -82,7 +80,7 @@ export function DimensionBreakdown({ stats, dimension, metric, pricing, classNam
   const max = rows[0].value;
 
   return (
-    <div className={cn("h-88 space-y-3 overflow-y-auto pr-1", className)}>
+    <div className={cn("space-y-3", className)}>
       {rows.map(({ stat, cost, value, fill }) => (
         <div key={`${stat.name}-${stat.secondary ?? ""}`} className="space-y-1">
           <div className="flex items-baseline justify-between gap-3">
