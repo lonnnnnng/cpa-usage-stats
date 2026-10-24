@@ -3,12 +3,15 @@ package plugin
 import (
 	"encoding/json"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 
+	"cpa-usage-stats/internal/config"
 	"cpa-usage-stats/internal/handler"
 	"cpa-usage-stats/internal/model"
+	"cpa-usage-stats/internal/storage"
 )
 
 // hostRegistration mirrors the fields CLIProxyAPI's validPlugin checks after
@@ -19,6 +22,143 @@ type hostRegistration struct {
 		Name, Version, Author, GitHubRepository string
 	} `json:"metadata"`
 	Capabilities map[string]bool `json:"capabilities"`
+}
+
+// 作者：long。先持读锁再确认写者排队，稳定重现统计查询递归读锁被写者阻塞的交错。
+func TestStatsWithPendingLifecycleWriter(t *testing.T) {
+	for _, operation := range []string{"reconfigure", "quiesce"} {
+		t.Run(operation, func(t *testing.T) {
+			p := GetInstance()
+			cfg := config.DefaultConfig()
+			cfg.DBPath = filepath.Join(t.TempDir(), "usage.db")
+			cfg.RetentionDays = 0
+			if err := p.apply(cfg); err != nil {
+				t.Fatal(err)
+			}
+			defer p.handleShutdown()
+			p.mu.RLock()
+			writerDone := make(chan error, 1)
+			go func() {
+				if operation == "reconfigure" {
+					writerDone <- p.apply(cfg)
+				} else {
+					p.handleQuiesce()
+					writerDone <- nil
+				}
+			}()
+			deadline := time.Now().Add(5 * time.Second)
+			for p.mu.TryRLock() {
+				p.mu.RUnlock()
+				if time.Now().After(deadline) {
+					p.mu.RUnlock()
+					<-writerDone
+					t.Fatal("lifecycle writer did not reach the instance lock")
+				}
+				runtime.Gosched()
+			}
+			response := make(chan model.ManagementResponse, 1)
+			go func() {
+				response <- p.handleManagementLocked(model.ManagementRequest{Method: "GET", Path: handler.APIBasePath + "/stats"})
+			}()
+			select {
+			case resp := <-response:
+				if resp.StatusCode != 200 {
+					t.Errorf("stats status = %d, body = %s", resp.StatusCode, resp.Body)
+				}
+				var stats model.RuntimeStats
+				if err := json.Unmarshal(resp.Body, &stats); err != nil || stats.QueueCapacity != cfg.ChannelSize {
+					t.Errorf("stats snapshot = %+v, error = %v", stats, err)
+				}
+			case <-time.After(time.Second):
+				t.Error("stats blocked behind a writer while already holding the instance read lock")
+				// 作者：long。失败时先撤销读锁以解开旧实现的循环等待，避免测试永久挂起。
+				p.mu.RUnlock()
+				<-response
+				<-writerDone
+				return
+			}
+			p.mu.RUnlock()
+			if err := <-writerDone; err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+// 作者：long。不同实例不能共用统计回调；数据库切换必须先落盘旧队列，再为新库启动独立 worker。
+func TestStatsIsolationAndStorageLifecycle(t *testing.T) {
+	p, other := &Instance{}, &Instance{}
+	defer p.handleShutdown()
+	defer other.handleShutdown()
+	cfg := config.DefaultConfig()
+	cfg.DBPath = filepath.Join(t.TempDir(), "first.db")
+	cfg.ChannelSize, cfg.RetentionDays = 17, 0
+	if err := p.apply(cfg); err != nil {
+		t.Fatal(err)
+	}
+	otherCfg := cfg
+	otherCfg.DBPath = filepath.Join(t.TempDir(), "other.db")
+	otherCfg.ChannelSize = 29
+	if err := other.apply(otherCfg); err != nil {
+		t.Fatal(err)
+	}
+	statsFor := func(instance *Instance) model.RuntimeStats {
+		t.Helper()
+		payload, err := json.Marshal(model.ManagementRequest{Method: "GET", Path: handler.APIBasePath + "/stats"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, err := instance.HandleCall("management.handle", payload)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var env model.Envelope
+		if err := json.Unmarshal(raw, &env); err != nil || !env.OK {
+			t.Fatalf("stats envelope = %s, error = %v", raw, err)
+		}
+		var response model.ManagementResponse
+		if err := json.Unmarshal(env.Result, &response); err != nil || response.StatusCode != 200 {
+			t.Fatalf("stats response = %s, error = %v", env.Result, err)
+		}
+		var stats model.RuntimeStats
+		if err := json.Unmarshal(response.Body, &stats); err != nil {
+			t.Fatal(err)
+		}
+		return stats
+	}
+	if statsFor(p).QueueCapacity != 17 || statsFor(other).QueueCapacity != 29 {
+		t.Fatal("runtime counters leaked across plugin instances")
+	}
+	record, err := json.Marshal(model.UsageRecord{RequestID: "before-switch", Model: "test-model", RequestedAt: time.Now()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.HandleCall("usage.handle", record); err != nil {
+		t.Fatal(err)
+	}
+	newCfg := cfg
+	newCfg.DBPath = filepath.Join(t.TempDir(), "second.db")
+	newCfg.ChannelSize = 31
+	if err := p.apply(newCfg); err != nil {
+		t.Fatal(err)
+	}
+	oldStore, err := storage.New(cfg.DBPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer oldStore.Close()
+	oldRecords, err := oldStore.GetRecords(model.UsageFilter{})
+	if err != nil || oldRecords.Total != 1 || oldRecords.Items[0].RequestID != "before-switch" {
+		t.Fatalf("old database was not drained before replacement: %+v, error = %v", oldRecords, err)
+	}
+	newRecords, err := p.store.GetRecords(model.UsageFilter{})
+	if err != nil || newRecords.Total != 0 || statsFor(p).QueueCapacity != 31 {
+		t.Fatalf("new database/worker state = %+v, error = %v", newRecords, err)
+	}
+	p.handleQuiesce()
+	if statsFor(p) != (model.RuntimeStats{}) || statsFor(other).QueueCapacity != 29 {
+		t.Fatal("quiesced instance must report zero counters without affecting another instance")
+	}
 }
 
 func call(t *testing.T, method string, req any) json.RawMessage {

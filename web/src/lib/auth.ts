@@ -112,15 +112,9 @@ export function resolveManagementKey(): ResolvedKey {
 }
 
 /**
- * 插件管理接口的 base。资源页始终由 CLIProxyAPI 自己提供，因此接口默认同源；
- * `?api_base=` 用于本地起前端调试远程宿主。
+ * 作者：long。管理密钥可从同源面板自动读取，因此 API 目标只能是页面自身的 origin，
+ * 不能让分享链接中的 api_base 改写目标；本地调试通过 Vite 的本机代理转发。
  */
 export function resolveApiBase(): string {
-  try {
-    const override = new URLSearchParams(window.location.search).get("api_base");
-    if (override) return override.replace(/\/+$/, "");
-  } catch {
-    // URL 异常时按同源处理
-  }
   return window.location.origin;
 }

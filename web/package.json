@@ -6,6 +6,7 @@
   "packageManager": "pnpm@12.10.1",
   "scripts": {
     "dev": "vite",
+    "test": "node --experimental-strip-types --test --test-timeout=10000 tests/*.test.ts",
     "build": "tsc -b && vite build",
     "check": "biome check . && tsc -b",
     "lint": "biome lint .",

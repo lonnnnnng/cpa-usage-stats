@@ -4,6 +4,14 @@
 
 CLIProxyAPI（CPA 8.0+）用量统计插件：通过 usage 插件接口采集请求与 Token 用量，异步写入 SQLite，并提供内嵌看板。
 
+## Fork 修复说明
+
+本仓库 fork 自 [tom2almighty/cpa-usage-stats](https://github.com/tom2almighty/cpa-usage-stats)，保留上游作者与 AGPL-3.0 许可证。
+
+- 管理请求固定同源，并拒绝重定向，移除可能将管理密钥发送至外站的 `api_base` 页面参数。
+- 运行时统计通过实例快照传递，修复统计查询与重配置/暂停并发时递归读锁可能造成的死锁。
+- 增加前端安全与后端并发回归测试。下文上游商店源及 Releases 不包含本 fork 的修复；使用修复版请从本仓库源码构建。
+
 ## 项目简介
 
 - 采集请求、Token、延迟、失败等用量数据，按批异步写入 SQLite。
@@ -20,10 +28,12 @@ CLIProxyAPI（CPA 8.0+）用量统计插件：通过 usage 插件接口采集请
 ```bash
 ./build.sh                              # 打包前端并编译动态库
 go test ./...                           # 后端测试
-cd web && pnpm install && pnpm run dev  # 单独调试前端
+cd web && pnpm install --frozen-lockfile && pnpm run dev  # 单独调试前端
 ```
 
-前端开发时资源页默认同源调用插件接口，用 `?api_base=http://127.0.0.1:8317` 指定正在运行的 CPA 地址。
+前端始终同源调用插件接口，`?api_base=` 不再生效。开发时访问 `http://127.0.0.1:5173`，Vite 仅监听本机，并将插件管理接口转发到 `http://127.0.0.1:8317`，不跟随上游重定向。远程 CPA 可先用 SSH 将其端口转发到本机 8317；不要将开发服务器暴露到公网。
+
+安全回归：在 `web/` 中执行 `pnpm test`；后端执行 `go test -race ./internal/...`。测试仅使用合成密钥和本地 HTTP 服务，不连接生产 CPA。
 
 前端技术栈：React 19、TypeScript、Vite、Tailwind CSS v4、shadcn、Recharts、i18next。
 

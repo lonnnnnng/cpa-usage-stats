@@ -4,6 +4,14 @@
 
 CLIProxyAPI (CPA 8.0+) usage statistics plugin: collects request and token usage through the usage plugin API, persists it asynchronously to SQLite, and ships an embedded dashboard.
 
+## Fork fixes
+
+Forked from [tom2almighty/cpa-usage-stats](https://github.com/tom2almighty/cpa-usage-stats), preserving upstream attribution and the AGPL-3.0 license.
+
+- Management requests are same-origin only and reject redirects. The `api_base` page parameter, which could send a management key to another server, is removed.
+- Runtime statistics use per-instance snapshots, avoiding recursive read-lock deadlocks during concurrent statistics queries and reconfiguration/quiesce.
+- Added frontend security and backend concurrency regression tests. The upstream store source and Releases below do not include these fork fixes; build this repository to use the fixed version.
+
 ## Overview
 
 - Collects requests, tokens, latency and failures, then writes them to SQLite in asynchronous batches.
@@ -20,10 +28,12 @@ Requirements:
 ```bash
 ./build.sh                              # build frontend and shared library
 go test ./...                           # backend tests
-cd web && pnpm install && pnpm run dev  # frontend only
+cd web && pnpm install --frozen-lockfile && pnpm run dev  # frontend only
 ```
 
-For frontend development, open `http://localhost:5173/?api_base=http://127.0.0.1:8317` and point it at a running CPA instance.
+API requests always target the page origin; `?api_base=` is ignored. For development, open `http://127.0.0.1:5173`. Vite listens on loopback only and proxies plugin management requests to `http://127.0.0.1:8317` without following redirects. For remote CPA instances, forward their port to local port 8317 over SSH. Do not expose the development server publicly.
+
+Run `pnpm test` in `web/` for security regressions and `go test -race ./internal/...` for backend regressions. Tests use synthetic keys and local HTTP servers, never a production CPA instance.
 
 Frontend stack: React 19, TypeScript, Vite, Tailwind CSS v4, shadcn, Recharts, i18next.
 

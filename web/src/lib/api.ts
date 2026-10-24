@@ -1,5 +1,5 @@
-import { resolveApiBase } from "@/lib/auth";
 import type { OptionsResponse, RecordListResponse, RuntimeStats, StorageStats, SummaryData } from "@/types";
+import { resolveApiBase } from "./auth.ts";
 
 const API_BASE = "/v0/management/plugins/cpa-usage-stats";
 
@@ -31,6 +31,10 @@ async function request<T>(key: string, path: string, params: Record<string, stri
   const res = await fetch(`${resolveApiBase()}${API_BASE}${path}${suffix}`, {
     method,
     headers: { Authorization: `Bearer ${key}` },
+    // 作者：long。管理接口只允许同源直达，部署层的跳转也不能携带管理密钥继续请求。
+    mode: "same-origin",
+    credentials: "same-origin",
+    redirect: "error",
   });
 
   if (res.status === 401) throw new UnauthorizedError();

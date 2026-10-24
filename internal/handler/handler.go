@@ -17,7 +17,7 @@ const APIBasePath = "/v0/management/plugins/cpa-usage-stats"
 // Handle serves plugin HTTP requests. Data is only returned on the
 // management routes, which the host protects with the management key; the
 // unauthenticated resource route only ever gets the dashboard HTML.
-func Handle(store *storage.Storage, html []byte, req model.ManagementRequest, retentionDays int) model.ManagementResponse {
+func Handle(store *storage.Storage, html []byte, req model.ManagementRequest, retentionDays int, stats model.RuntimeStats) model.ManagementResponse {
 	if !strings.HasPrefix(req.Path, APIBasePath+"/") {
 		return htmlResponse(html)
 	}
@@ -46,9 +46,8 @@ func Handle(store *storage.Storage, html []byte, req model.ManagementRequest, re
 		}
 		return jsonOK(options)
 	case "/stats":
-		// Runtime counters that live outside the database (dropped records,
-		// queue pressure) so the dashboard can flag silent data loss.
-		return jsonOK(statsProvider())
+		// 作者：long。使用所属实例传入的统计快照，不在持锁查询中回调实例再次加锁。
+		return jsonOK(stats)
 	case "/storage":
 		stats, err := store.Stats(retentionDays)
 		if err != nil {
@@ -70,15 +69,6 @@ func Handle(store *storage.Storage, html []byte, req model.ManagementRequest, re
 	default:
 		return jsonError(http.StatusNotFound, "not_found", "unknown endpoint")
 	}
-}
-
-// statsProvider is swapped in by the plugin so /stats can report worker
-// counters without the handler importing the worker package.
-var statsProvider = func() model.RuntimeStats { return model.RuntimeStats{} }
-
-// SetStatsProvider installs the runtime counter source for /stats.
-func SetStatsProvider(provider func() model.RuntimeStats) {
-	statsProvider = provider
 }
 
 func htmlResponse(body []byte) model.ManagementResponse {

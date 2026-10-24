@@ -45,12 +45,15 @@ jobs:
         working-directory: web
         run: |
           pnpm install --frozen-lockfile
+          pnpm run test
           pnpm run lint
           pnpm run format:check
           pnpm run build
       - name: Backend Test
         run: |
           go test -v ./...
+          go test -race ./internal/...
+          go vet ./...
 
       - name: Backend Build Check
         run: |

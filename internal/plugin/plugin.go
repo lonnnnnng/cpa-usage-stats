@@ -39,20 +39,6 @@ var (
 func GetInstance() *Instance {
 	once.Do(func() {
 		pluginInstance = &Instance{}
-		// The handler cannot import the worker package (it would cycle through
-		// storage), so the counter source is injected here.
-		handler.SetStatsProvider(func() model.RuntimeStats {
-			p := pluginInstance
-			if p == nil {
-				return model.RuntimeStats{}
-			}
-			p.mu.RLock()
-			defer p.mu.RUnlock()
-			if p.worker == nil {
-				return model.RuntimeStats{}
-			}
-			return p.worker.Stats()
-		})
 	})
 	return pluginInstance
 }
@@ -253,7 +239,18 @@ func (p *Instance) handleManagementHandle(payload []byte) ([]byte, error) {
 
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	return okEnvelope(handler.Handle(p.store, p.htmlContent, req, p.cfg.RetentionDays))
+	return okEnvelope(p.handleManagementLocked(req))
+}
+
+// handleManagementLocked 由持有实例读锁的调用方执行，防止查询期间数据库被替换关闭。作者：long。
+func (p *Instance) handleManagementLocked(req model.ManagementRequest) model.ManagementResponse {
+	// 作者：long。在已有读锁内取得快照，避免写者排队时统计回调递归 RLock 形成循环等待；
+	// 查询结束前仍持有外层读锁，保证重配置不会提前关闭正在使用的数据库。
+	var stats model.RuntimeStats
+	if p.worker != nil {
+		stats = p.worker.Stats()
+	}
+	return handler.Handle(p.store, p.htmlContent, req, p.cfg.RetentionDays, stats)
 }
 
 func (p *Instance) handleShutdown() {
