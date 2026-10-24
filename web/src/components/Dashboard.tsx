@@ -114,92 +114,10 @@ export function Dashboard() {
 
   return (
     <div className="w-full max-w-none space-y-4 p-4 md:p-6">
-      <header className="flex flex-col gap-3 border-b pb-4 lg:flex-row lg:items-center lg:justify-between">
+      <header className="flex items-center gap-3 border-b pb-4">
         <div className="flex min-w-0 items-center gap-2.5">
           <Logo className="size-8 shrink-0 rounded-md" />
           <h1 className="truncate text-lg font-semibold tracking-tight md:text-xl">{t("dashboard.title")}</h1>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {/* 与主内容页签共用同一套 Tabs 样式，避免两处页签观感不一致 */}
-          <Tabs
-            value={range}
-            onValueChange={(value) => {
-              if (!value) return;
-              setRange(value as TimeRange);
-              setPage(1);
-            }}
-            className="shrink-0 gap-0"
-          >
-            <TabsList aria-label={t("dashboard.range.label")}>
-              {RANGE_OPTIONS.map((value) => (
-                <TabsTrigger key={value} value={value} className="h-6.5">
-                  {t(`dashboard.range.${value}`)}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
-
-          <Select
-            items={REFRESH_OPTIONS.map((option) => ({ value: option.value, label: t(option.labelKey) }))}
-            value={autoRefresh}
-            onValueChange={(value) => setAutoRefresh(String(value))}
-          >
-            <SelectTrigger size="sm" className="w-32" aria-label={t("dashboard.auto_refresh.label")}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {REFRESH_OPTIONS.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {t(option.labelKey)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            onClick={() => void refetch()}
-            disabled={!key || loading}
-          >
-            <RefreshCw className={cn(loading && "animate-spin")} />
-            {t("common.refresh")}
-          </Button>
-
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="gap-1.5 text-muted-foreground"
-                  onClick={() => setKeyDialogOpen(true)}
-                />
-              }
-            >
-              <span
-                className={cn(
-                  "size-1.5 rounded-full",
-                  key ? (unauthorized ? "bg-destructive" : "bg-success") : "bg-muted-foreground",
-                )}
-              />
-              <KeyRound className="size-3.5" />
-              {t("dashboard.key.action")}
-            </TooltipTrigger>
-            <TooltipContent>
-              {key
-                ? `${t("dashboard.key.status_connected")} · ${t("dashboard.key.source_label", {
-                    source: t(`dashboard.key.source.${source}`),
-                  })}`
-                : t("dashboard.key.status_missing")}
-            </TooltipContent>
-          </Tooltip>
-
-          <DisplaySettings />
-          <LanguageToggle />
-          <ThemeToggle />
         </div>
       </header>
 
@@ -252,6 +170,87 @@ export function Dashboard() {
               {t("dashboard.tabs.storage")}
             </TabsTrigger>
           </TabsList>
+          <div className="flex flex-wrap items-center gap-2 sm:flex-1 sm:justify-center">
+            {/* 作者：long。把全局查询与外观控制放在主页签行，避免占用标题栏并保持内容上下文一致。 */}
+            <Tabs
+              value={range}
+              onValueChange={(value) => {
+                if (!value) return;
+                setRange(value as TimeRange);
+                setPage(1);
+              }}
+              className="shrink-0 gap-0"
+            >
+              <TabsList aria-label={t("dashboard.range.label")}>
+                {RANGE_OPTIONS.map((value) => (
+                  <TabsTrigger key={value} value={value} className="h-6.5">
+                    {t(`dashboard.range.${value}`)}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+
+            <Select
+              items={REFRESH_OPTIONS.map((option) => ({ value: option.value, label: t(option.labelKey) }))}
+              value={autoRefresh}
+              onValueChange={(value) => setAutoRefresh(String(value))}
+            >
+              <SelectTrigger size="sm" className="w-32" aria-label={t("dashboard.auto_refresh.label")}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {REFRESH_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {t(option.labelKey)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => void refetch()}
+              disabled={!key || loading}
+            >
+              <RefreshCw className={cn(loading && "animate-spin")} />
+              {t("common.refresh")}
+            </Button>
+
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="gap-1.5 text-muted-foreground"
+                    onClick={() => setKeyDialogOpen(true)}
+                  />
+                }
+              >
+                <span
+                  className={cn(
+                    "size-1.5 rounded-full",
+                    key ? (unauthorized ? "bg-destructive" : "bg-success") : "bg-muted-foreground",
+                  )}
+                />
+                <KeyRound className="size-3.5" />
+                {t("dashboard.key.action")}
+              </TooltipTrigger>
+              <TooltipContent>
+                {key
+                  ? `${t("dashboard.key.status_connected")} · ${t("dashboard.key.source_label", {
+                      source: t(`dashboard.key.source.${source}`),
+                    })}`
+                  : t("dashboard.key.status_missing")}
+              </TooltipContent>
+            </Tooltip>
+
+            <DisplaySettings />
+            <LanguageToggle />
+            <ThemeToggle />
+          </div>
           <PricingSource pricing={pricing} />
         </div>
 
