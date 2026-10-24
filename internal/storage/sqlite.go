@@ -32,6 +32,16 @@ const (
 	maxErrorType = 64
 )
 
+// These expressions normalize the two cache counter layouts emitted by CPA:
+// OpenAI-compatible records include cache reads inside input_tokens, whereas
+// Anthropic records keep uncached input, cache reads, and cache writes apart.
+// 作者：long
+const (
+	effectiveCacheReadSQL = "CASE WHEN cache_read_tokens > 0 THEN cache_read_tokens ELSE cached_tokens END"
+	anthropicCacheSQL     = "(INSTR(LOWER(COALESCE(provider, '')), 'anthropic') > 0 OR INSTR(LOWER(COALESCE(provider, '')), 'claude') > 0 OR INSTR(LOWER(COALESCE(executor_type, '')), 'anthropic') > 0 OR INSTR(LOWER(COALESCE(executor_type, '')), 'claude') > 0 OR INSTR(LOWER(COALESCE(source, '')), 'anthropic') > 0 OR INSTR(LOWER(COALESCE(source, '')), 'claude') > 0)"
+	cachePromptSQL        = "CASE WHEN " + anthropicCacheSQL + " THEN input_tokens + (" + effectiveCacheReadSQL + ") + cache_creation_tokens WHEN input_tokens > 0 THEN input_tokens ELSE (" + effectiveCacheReadSQL + ") + cache_creation_tokens END"
+)
+
 // errorTypeKeys are the JSON paths upstream APIs use for a machine-readable
 // error identifier, in priority order.
 var errorTypeKeys = []string{"$.error.type", "$.error.code", "$.type", "$.code"}
@@ -435,6 +445,7 @@ func (s *Storage) GetSummary(filter model.UsageFilter, hourly bool) (*model.Summ
 	where, args := buildWhere(filter)
 
 	resp := &model.SummaryResponse{Bucket: "day"}
+	var cachePromptTokens int64
 	// Latency percentiles come from the same single pass: CUME_DIST gives each
 	// row its cumulative share, so the first row reaching the target share is
 	// the nearest-rank percentile (PERCENT_RANK would return the row below it).
@@ -447,7 +458,7 @@ func (s *Storage) GetSummary(filter model.UsageFilter, hourly bool) (*model.Summ
 			COALESCE(SUM(output_tokens), 0),
 			COALESCE(SUM(reasoning_tokens), 0),
 			COALESCE(SUM(cached_tokens), 0),
-			COALESCE(SUM(cache_read_tokens), 0),
+			COALESCE(SUM(`+effectiveCacheReadSQL+`), 0),
 			COALESCE(SUM(cache_creation_tokens), 0),
 			COALESCE(AVG(latency_ms), 0),
 			COALESCE(AVG(CASE WHEN stream = 1 AND ttft_ms > 0 THEN ttft_ms END), 0),
@@ -457,6 +468,7 @@ func (s *Storage) GetSummary(filter model.UsageFilter, hourly bool) (*model.Summ
 			COALESCE(SUM(CASE WHEN stream = 1 THEN 1 ELSE 0 END), 0),
 			COALESCE(AVG(CASE WHEN stream = 1 AND latency_ms > ttft_ms AND output_tokens > 0
 				THEN output_tokens * 1000.0 / (latency_ms - ttft_ms) END), 0)
+			, COALESCE(SUM(`+cachePromptSQL+`), 0)
 		FROM (
 			SELECT *, CUME_DIST() OVER (ORDER BY latency_ms) AS pct FROM usage_records %s
 		)
@@ -477,6 +489,7 @@ func (s *Storage) GetSummary(filter model.UsageFilter, hourly bool) (*model.Summ
 		&resp.P99LatencyMs,
 		&resp.StreamRequests,
 		&resp.AvgOutputTps,
+		&cachePromptTokens,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("query total summary: %w", err)
@@ -487,10 +500,10 @@ func (s *Storage) GetSummary(filter model.UsageFilter, hourly bool) (*model.Summ
 	} else {
 		resp.SuccessRate = 100
 	}
-	// CPA 将未缓存输入、缓存读取、缓存写入分别上报；命中率分母必须覆盖
-	// 完整 prompt，不能因为缓存写入存在就把它从分母中漏掉。作者：long
-	if prompt := resp.InputTokens + resp.CacheReadTokens + resp.CacheCreationTokens; prompt > 0 {
-		resp.CacheHitRate = float64(resp.CacheReadTokens) / float64(prompt) * 100
+	// 同一份汇总可能同时包含 OpenAI/Codex 与 Anthropic；SQL 已按每条记录
+	// 的协议语义计算 prompt 分母，避免把两种 token 口径混成一个比例。作者：long
+	if cachePromptTokens > 0 {
+		resp.CacheHitRate = float64(resp.CacheReadTokens) / float64(cachePromptTokens) * 100
 	}
 
 	// Every dimension shares the same shape, so they are declared once and
@@ -590,7 +603,7 @@ func (s *Storage) groupStats(groupBy, secondary, where string, args []interface{
 			COALESCE(SUM(output_tokens), 0),
 			COALESCE(SUM(reasoning_tokens), 0),
 			COALESCE(SUM(cached_tokens), 0),
-			COALESCE(SUM(cache_read_tokens), 0),
+			COALESCE(SUM(`+effectiveCacheReadSQL+`), 0),
 			COALESCE(SUM(cache_creation_tokens), 0),
 			COALESCE(AVG(latency_ms), 0),
 			COALESCE(MIN(CASE WHEN pct >= 0.95 THEN latency_ms END), 0),

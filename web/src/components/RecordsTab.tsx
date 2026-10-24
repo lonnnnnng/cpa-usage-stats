@@ -32,7 +32,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useFormat } from "@/hooks/use-format";
 import type { PricingState } from "@/hooks/use-pricing";
 import { useI18n } from "@/i18n/context";
-import { cacheHitRatePercent, recordLatencyTone, toneTextClass } from "@/lib/metrics";
+import { cacheHitRatePercent, classifyRequestProtocol, recordLatencyTone, toneTextClass } from "@/lib/metrics";
 import { type RecordCost, recordCost } from "@/lib/pricing";
 import { cn, copyToClipboard, formatDateTimeFull, formatDuration, maskApiKey } from "@/lib/utils";
 import type { OptionsResponse, RecordListResponse, RecordsFilters, StoredRecord } from "@/types";
@@ -171,7 +171,15 @@ function DetailRow({ record, cost }: { record: StoredRecord; cost: RecordCost | 
     ...(record.parent_session_id
       ? [{ label: t("records.detail.parent_session"), value: record.parent_session_id }]
       : []),
-    { label: t("records.detail.base_url"), value: record.base_url },
+    {
+      label: t("records.detail.protocol"),
+      value: t(
+        `records.detail.protocol_${classifyRequestProtocol(record.provider, record.executor_type, record.source)}`,
+      ),
+      badge: true,
+    },
+    { label: t("records.detail.inbound_url"), value: t("records.detail.inbound_unavailable") },
+    { label: t("records.detail.outbound_url"), value: record.base_url },
     {
       label: t("records.detail.auth"),
       value: [record.auth_id, record.auth_index && `#${record.auth_index}`, record.auth_type]
@@ -225,11 +233,25 @@ function DetailRow({ record, cost }: { record: StoredRecord; cost: RecordCost | 
     ...(record.cache_creation_tokens > 0
       ? [{ label: t("records.detail.token_cache_write"), value: formatNumber(record.cache_creation_tokens) }]
       : []),
-    ...(cacheHitRatePercent(record.input_tokens, record.cache_read_tokens, record.cache_creation_tokens) !== null
+    ...(cacheHitRatePercent(
+      record.input_tokens,
+      record.cache_read_tokens,
+      record.cache_creation_tokens,
+      record.provider,
+      record.executor_type,
+      record.source,
+    ) !== null
       ? [
           {
             label: t("records.detail.token_cache_rate"),
-            value: `${cacheHitRatePercent(record.input_tokens, record.cache_read_tokens, record.cache_creation_tokens)?.toFixed(1)}%`,
+            value: `${cacheHitRatePercent(
+              record.input_tokens,
+              record.cache_read_tokens,
+              record.cache_creation_tokens,
+              record.provider,
+              record.executor_type,
+              record.source,
+            )?.toFixed(1)}%`,
             emphasis: true,
           },
         ]

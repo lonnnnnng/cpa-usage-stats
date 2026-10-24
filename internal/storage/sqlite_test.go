@@ -458,11 +458,11 @@ func TestSummaryDerivedMetrics(t *testing.T) {
 			TTFT:        50 * time.Millisecond,
 			Stream:      true,
 			Detail: model.UsageDetail{
-				InputTokens:     100,
-				OutputTokens:    200,
+				InputTokens:         1000,
+				OutputTokens:        200,
 				CacheReadTokens:     300,
 				CacheCreationTokens: 100,
-				TotalTokens:     600,
+				TotalTokens:         600,
 			},
 		})
 	}
@@ -500,9 +500,9 @@ func TestSummaryDerivedMetrics(t *testing.T) {
 	if summary.P99LatencyMs != 10000 {
 		t.Errorf("p99 = %v, want 10000", summary.P99LatencyMs)
 	}
-	// cache_read / (input + cache_read + cache_creation) = 1500 / 2500 = 60%
-	if summary.CacheHitRate != 60 {
-		t.Errorf("cache hit rate = %v, want 60", summary.CacheHitRate)
+	// OpenAI input_tokens already includes cached input, so 300 / 1000 = 30%.
+	if summary.CacheHitRate != 30 {
+		t.Errorf("cache hit rate = %v, want 30", summary.CacheHitRate)
 	}
 	if summary.StreamRequests != 5 {
 		t.Errorf("stream requests = %d, want 5", summary.StreamRequests)
@@ -549,6 +549,42 @@ func TestSummaryDerivedMetrics(t *testing.T) {
 	point := summary.Trend[0]
 	if point.AvgLatencyMs <= 0 || point.P95LatencyMs <= 0 {
 		t.Errorf("trend point = %+v, want latency stats", point)
+	}
+}
+
+func TestCacheHitRateUsesProviderSemantics(t *testing.T) {
+	if got, ok := model.CacheHitRate(1000, 300, 100, model.CacheSubset); !ok || got != 30 {
+		t.Errorf("OpenAI cache hit rate = %v/%v, want 30/true", got, ok)
+	}
+	// Anthropic input_tokens excludes cache reads and writes.
+	if got, ok := model.CacheHitRate(100, 300, 100, model.CacheIndependent); !ok || got != 60 {
+		t.Errorf("Anthropic cache hit rate = %v/%v, want 60/true", got, ok)
+	}
+}
+
+func TestMixedCacheHitRateUsesPerRecordDenominator(t *testing.T) {
+	store, err := New(filepath.Join(t.TempDir(), "usage.db"))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer store.Close()
+
+	now := time.Now()
+	records := []model.UsageRecord{
+		{RequestID: "openai", Provider: "openai", RequestedAt: now, Detail: model.UsageDetail{InputTokens: 1000, CacheReadTokens: 500}},
+		{RequestID: "anthropic", Provider: "anthropic", RequestedAt: now, Detail: model.UsageDetail{InputTokens: 100, CacheReadTokens: 300, CacheCreationTokens: 100}},
+	}
+	if err := store.InsertBatch(records); err != nil {
+		t.Fatalf("InsertBatch: %v", err)
+	}
+	summary, err := store.GetSummary(model.UsageFilter{}, false)
+	if err != nil {
+		t.Fatalf("GetSummary: %v", err)
+	}
+	// OpenAI contributes 500/1000 and Anthropic contributes 300/500;
+	// aggregate result is 800 / (1000 + 500) = 53.333...%.
+	if want := 800.0 / 1500.0 * 100; summary.CacheHitRate != want {
+		t.Errorf("mixed cache hit rate = %v, want %v", summary.CacheHitRate, want)
 	}
 }
 
