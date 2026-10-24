@@ -17,7 +17,7 @@ export type FormatPreferences = {
 export const FORMAT_STORAGE_KEY = "cpa-usage-stats.format";
 
 export const DEFAULT_FORMAT_PREFERENCES: FormatPreferences = {
-  numberStyle: "localized",
+  numberStyle: "en-compact",
   currency: "USD",
   exchangeRate: 7.2,
 };

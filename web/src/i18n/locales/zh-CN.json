@@ -202,15 +202,22 @@
       "status": "状态",
       "model": "模型",
       "provider": "Provider",
-      "tokens": "词元（入 / 出 / 总）",
+      "tokens": "Tokens",
       "cost": "预估成本",
-      "latency": "耗时 / TTFT"
+      "latency": "耗时"
     },
     "row": {
       "alias": "别名 {{name}}",
       "upstream": "上游 {{name}}",
       "cache": "缓存 读 {{read}} / 写 {{write}}",
-      "throughput": "{{value}} t/s"
+      "throughput": "{{value}} t/s",
+      "token_input": "输入 Token",
+      "token_output": "输出 Token",
+      "token_cache": "缓存 Token",
+      "token_total": "总 Token",
+      "first_token": "首字",
+      "total_duration": "总耗时",
+      "output_tps": "输出 TPS"
     },
     "detail": {
       "request_id": "Request ID",

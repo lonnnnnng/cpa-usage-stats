@@ -460,7 +460,8 @@ func TestSummaryDerivedMetrics(t *testing.T) {
 			Detail: model.UsageDetail{
 				InputTokens:     100,
 				OutputTokens:    200,
-				CacheReadTokens: 300,
+				CacheReadTokens:     300,
+				CacheCreationTokens: 100,
 				TotalTokens:     600,
 			},
 		})
@@ -499,9 +500,9 @@ func TestSummaryDerivedMetrics(t *testing.T) {
 	if summary.P99LatencyMs != 10000 {
 		t.Errorf("p99 = %v, want 10000", summary.P99LatencyMs)
 	}
-	// cache_read / (input + cache_read) = 1500 / (500 + 1500) = 75%
-	if summary.CacheHitRate != 75 {
-		t.Errorf("cache hit rate = %v, want 75", summary.CacheHitRate)
+	// cache_read / (input + cache_read + cache_creation) = 1500 / 2500 = 60%
+	if summary.CacheHitRate != 60 {
+		t.Errorf("cache hit rate = %v, want 60", summary.CacheHitRate)
 	}
 	if summary.StreamRequests != 5 {
 		t.Errorf("stream requests = %d, want 5", summary.StreamRequests)

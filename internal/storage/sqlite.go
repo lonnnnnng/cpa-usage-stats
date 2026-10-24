@@ -487,7 +487,9 @@ func (s *Storage) GetSummary(filter model.UsageFilter, hourly bool) (*model.Summ
 	} else {
 		resp.SuccessRate = 100
 	}
-	if prompt := resp.InputTokens + resp.CacheReadTokens; prompt > 0 {
+	// CPA 将未缓存输入、缓存读取、缓存写入分别上报；命中率分母必须覆盖
+	// 完整 prompt，不能因为缓存写入存在就把它从分母中漏掉。作者：long
+	if prompt := resp.InputTokens + resp.CacheReadTokens + resp.CacheCreationTokens; prompt > 0 {
 		resp.CacheHitRate = float64(resp.CacheReadTokens) / float64(prompt) * 100
 	}
 

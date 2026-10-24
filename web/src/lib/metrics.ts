@@ -34,6 +34,20 @@ export function latencyTone(ms: number): ReturnType<typeof speedTone> {
   return "danger";
 }
 
+/** 调用明细的耗时分档：10 秒内可接受，60 秒内需留意，其余标红。作者：long */
+export function recordLatencyTone(ms: number | null): ReturnType<typeof speedTone> {
+  if (ms === null || !Number.isFinite(ms) || ms <= 0) return "muted";
+  if (ms < 10_000) return "success";
+  if (ms < 60_000) return "warning";
+  return "danger";
+}
+
+/** CPA 将缓存读取与缓存写入拆开记录，命中率分母覆盖完整 prompt。作者：long */
+export function cacheHitRatePercent(input: number, cacheRead: number, cacheCreation: number): number | null {
+  const prompt = input + cacheRead + cacheCreation;
+  return prompt > 0 && cacheRead >= 0 ? (cacheRead / prompt) * 100 : null;
+}
+
 export function toneTextClass(tone: ReturnType<typeof speedTone>): string {
   switch (tone) {
     case "success":

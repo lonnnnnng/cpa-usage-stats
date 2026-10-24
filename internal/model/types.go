@@ -189,8 +189,10 @@ type SummaryResponse struct {
 	CachedTokens        int64   `json:"cached_tokens"`
 	CacheReadTokens     int64   `json:"cache_read_tokens"`
 	CacheCreationTokens int64   `json:"cache_creation_tokens"`
-	// CacheHitRate is the share of prompt tokens served from cache:
-	// cache_read / (input + cache_read).
+	// CacheHitRate is the share of all prompt tokens served from cache. CPA
+	// reports uncached input, cache reads, and cache creation separately, so
+	// cache creation must remain in the denominator even though it is not a hit.
+	// 作者：long
 	CacheHitRate   float64 `json:"cache_hit_rate"`
 	AvgLatencyMs   float64 `json:"avg_latency_ms"`
 	AvgTTFTMs      float64 `json:"avg_ttft_ms"`

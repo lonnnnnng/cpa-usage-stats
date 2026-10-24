@@ -202,15 +202,22 @@
       "status": "Status",
       "model": "Model",
       "provider": "Provider",
-      "tokens": "Tokens (in / out / total)",
+      "tokens": "Tokens",
       "cost": "Est. cost",
-      "latency": "Latency / TTFT"
+      "latency": "Latency"
     },
     "row": {
       "alias": "alias {{name}}",
       "upstream": "upstream {{name}}",
       "cache": "cache read {{read}} / write {{write}}",
-      "throughput": "{{value}} t/s"
+      "throughput": "{{value}} t/s",
+      "token_input": "Input Token",
+      "token_output": "Output Token",
+      "token_cache": "Cached Token",
+      "token_total": "Total Token",
+      "first_token": "First token",
+      "total_duration": "Total",
+      "output_tps": "Output TPS"
     },
     "detail": {
       "request_id": "Request ID",

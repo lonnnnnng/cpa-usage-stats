@@ -1,4 +1,15 @@
-import { AlertCircle, Check, Copy, Layers, RotateCcw, Search } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  Check,
+  Copy,
+  Database,
+  Layers,
+  RotateCcw,
+  Search,
+  Sigma,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,7 +32,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useFormat } from "@/hooks/use-format";
 import type { PricingState } from "@/hooks/use-pricing";
 import { useI18n } from "@/i18n/context";
-import { latencyTone, toneTextClass } from "@/lib/metrics";
+import { cacheHitRatePercent, recordLatencyTone, toneTextClass } from "@/lib/metrics";
 import { type RecordCost, recordCost } from "@/lib/pricing";
 import { cn, copyToClipboard, formatDateTimeFull, formatDuration, maskApiKey } from "@/lib/utils";
 import type { OptionsResponse, RecordListResponse, RecordsFilters, StoredRecord } from "@/types";
@@ -214,11 +225,11 @@ function DetailRow({ record, cost }: { record: StoredRecord; cost: RecordCost | 
     ...(record.cache_creation_tokens > 0
       ? [{ label: t("records.detail.token_cache_write"), value: formatNumber(record.cache_creation_tokens) }]
       : []),
-    ...(record.cache_read_tokens > 0 && record.input_tokens > 0
+    ...(cacheHitRatePercent(record.input_tokens, record.cache_read_tokens, record.cache_creation_tokens) !== null
       ? [
           {
             label: t("records.detail.token_cache_rate"),
-            value: `${((record.cache_read_tokens / (record.input_tokens + record.cache_read_tokens)) * 100).toFixed(1)}%`,
+            value: `${cacheHitRatePercent(record.input_tokens, record.cache_read_tokens, record.cache_creation_tokens)?.toFixed(1)}%`,
             emphasis: true,
           },
         ]
@@ -519,9 +530,9 @@ export function RecordsTab({
                   : items.map((record) => {
                       const expanded = expandedId === record.id;
                       const cost = recordCost(pricing.table, record);
-                      const generationMs = record.latency_ms - record.ttft_ms;
+                      const generationMs = record.ttft_ms > 0 ? record.latency_ms - record.ttft_ms : record.latency_ms;
                       const throughput =
-                        record.stream && generationMs > 100 && record.output_tokens > 0
+                        generationMs > 100 && record.output_tokens > 0
                           ? (record.output_tokens / (generationMs / 1000)).toFixed(1)
                           : null;
 
@@ -711,43 +722,88 @@ function RecordRows({
             {record.provider || "-"}
           </span>
         </TableCell>
-        <TableCell className="w-56 py-3 text-right font-mono tabular-nums">
-          <div className="flex items-center justify-end gap-1">
-            <span className="text-muted-foreground" title={t("records.detail.token_input")}>
-              ↓{formatNumber(record.input_tokens)}
-            </span>
-            <span className="text-muted-foreground">/</span>
-            <span className="text-muted-foreground" title={t("records.detail.token_output")}>
-              ↑{formatNumber(record.output_tokens)}
-            </span>
-            <span className="text-muted-foreground">/</span>
-            <span className="font-semibold text-foreground" title={t("records.detail.token_total")}>
-              Σ{formatNumber(record.total_tokens)}
-            </span>
+        <TableCell className="w-56 py-2 text-right font-mono tabular-nums">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+            <TokenMetric
+              icon={ArrowDownToLine}
+              label={t("records.row.token_input")}
+              value={record.input_tokens}
+              className="text-sky-600 dark:text-sky-400"
+              formatNumber={formatNumber}
+            />
+            <TokenMetric
+              icon={ArrowUpFromLine}
+              label={t("records.row.token_output")}
+              value={record.output_tokens}
+              className="text-violet-600 dark:text-violet-400"
+              formatNumber={formatNumber}
+            />
+            <TokenMetric
+              icon={Database}
+              label={t("records.row.token_cache")}
+              value={record.cached_tokens}
+              className="text-amber-600 dark:text-amber-400"
+              formatNumber={formatNumber}
+            />
+            <TokenMetric
+              icon={Sigma}
+              label={t("records.row.token_total")}
+              value={record.total_tokens}
+              className="font-semibold text-foreground"
+              formatNumber={formatNumber}
+            />
           </div>
-          {(record.cache_read_tokens > 0 || record.cache_creation_tokens > 0) && (
-            <div className="text-xs text-muted-foreground">
-              {t("records.row.cache", {
-                read: formatNumber(record.cache_read_tokens),
-                write: formatNumber(record.cache_creation_tokens),
-              })}
-            </div>
-          )}
         </TableCell>
         <TableCell className="w-32 py-3 whitespace-nowrap text-right font-mono tabular-nums">
           <CostCell cost={cost} />
         </TableCell>
         <TableCell className="w-40 py-3 pr-4 whitespace-nowrap text-right font-mono tabular-nums">
-          <div className={toneTextClass(latencyTone(record.latency_ms))}>{formatDuration(record.latency_ms)}</div>
-          {record.stream && record.ttft_ms > 0 && (
-            <div className="text-xs text-muted-foreground">
-              <span className={toneTextClass(latencyTone(record.ttft_ms))}>TTFT {formatDuration(record.ttft_ms)}</span>
-              {throughput && ` · ${t("records.row.throughput", { value: throughput })}`}
+          <div className="space-y-1 text-xs">
+            <div
+              className={cn(
+                "flex items-center justify-end gap-1",
+                toneTextClass(recordLatencyTone(record.ttft_ms > 0 ? record.ttft_ms : null)),
+              )}
+            >
+              <span className="text-muted-foreground">{t("records.row.first_token")}</span>
+              <span>{record.ttft_ms > 0 ? formatDuration(record.ttft_ms) : "-"}</span>
             </div>
-          )}
+            <div
+              className={cn("flex items-center justify-end gap-1", toneTextClass(recordLatencyTone(record.latency_ms)))}
+            >
+              <span className="text-muted-foreground">{t("records.row.total_duration")}</span>
+              <span>{record.latency_ms > 0 ? formatDuration(record.latency_ms) : "-"}</span>
+            </div>
+            <div className="flex items-center justify-end gap-1 text-muted-foreground">
+              <span>{t("records.row.output_tps")}</span>
+              <span>{throughput ? t("records.row.throughput", { value: throughput }) : "-"}</span>
+            </div>
+          </div>
         </TableCell>
       </TableRow>
       {expanded && <DetailRow record={record} cost={cost} />}
     </>
+  );
+}
+
+function TokenMetric({
+  icon: Icon,
+  label,
+  value,
+  className,
+  formatNumber,
+}: {
+  icon: typeof ArrowDownToLine;
+  label: string;
+  value: number;
+  className: string;
+  formatNumber: (value: number) => string;
+}) {
+  return (
+    <span className={cn("inline-flex min-w-0 items-center justify-end gap-1", className)} title={label}>
+      <Icon className="size-3 shrink-0" aria-hidden="true" />
+      <span className="truncate text-[10px] font-sans text-muted-foreground">{label}</span>
+      <span>{formatNumber(value)}</span>
+    </span>
   );
 }
