@@ -1,4 +1,4 @@
-import { AlertCircle, Check, CheckCircle2, Copy, Layers, RotateCcw, Search } from "lucide-react";
+import { AlertCircle, Check, Copy, Layers, RotateCcw, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,7 @@ import type { PricingState } from "@/hooks/use-pricing";
 import { useI18n } from "@/i18n/context";
 import { latencyTone, toneTextClass } from "@/lib/metrics";
 import { type RecordCost, recordCost } from "@/lib/pricing";
-import { cn, copyToClipboard, formatDateTime, formatDuration, maskApiKey } from "@/lib/utils";
+import { cn, copyToClipboard, formatDateTimeFull, formatDuration, maskApiKey } from "@/lib/utils";
 import type { OptionsResponse, RecordListResponse, RecordsFilters, StoredRecord } from "@/types";
 
 interface RecordsTabProps {
@@ -228,7 +228,7 @@ function DetailRow({ record, cost }: { record: StoredRecord; cost: RecordCost | 
 
   return (
     <TableRow className="bg-muted/30 hover:bg-muted/30">
-      <TableCell colSpan={7} className="whitespace-normal px-4 py-3">
+      <TableCell colSpan={6} className="whitespace-normal px-4 py-3">
         <div className="space-y-3">
           {/* 词元与费用放在最上方，保持一行，便于快速扫读 */}
           <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1.5">
@@ -496,20 +496,19 @@ export function RecordsTab({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="pl-4">{t("records.th.time")}</TableHead>
-                <TableHead>{t("records.th.status")}</TableHead>
-                <TableHead>{t("records.th.model")}</TableHead>
-                <TableHead>{t("records.th.provider")}</TableHead>
-                <TableHead className="w-32 text-right">{t("records.th.tokens")}</TableHead>
-                <TableHead className="w-24 text-right">{t("records.th.cost")}</TableHead>
-                <TableHead className="w-28 pr-4 text-right">{t("records.th.latency")}</TableHead>
+                <TableHead className="w-44 pl-4">{t("records.th.time")}</TableHead>
+                <TableHead className="w-[24%]">{t("records.th.model")}</TableHead>
+                <TableHead className="w-[16%]">{t("records.th.provider")}</TableHead>
+                <TableHead className="w-56 text-right">{t("records.th.tokens")}</TableHead>
+                <TableHead className="w-32 text-right">{t("records.th.cost")}</TableHead>
+                <TableHead className="w-40 pr-4 text-right">{t("records.th.latency")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading
                 ? ROW_SKELETON_KEYS.map((rowKey) => (
                     <TableRow key={rowKey}>
-                      <TableCell colSpan={7} className="px-4">
+                      <TableCell colSpan={6} className="px-4">
                         <Skeleton className="h-5 w-full" />
                       </TableCell>
                     </TableRow>
@@ -650,7 +649,7 @@ function RecordRows({
   onToggle: () => void;
 }) {
   const { t } = useI18n();
-  const { formatTokens } = useFormat();
+  const { formatNumber } = useFormat();
   const aliasNote =
     (record.alias && record.alias !== record.model) || (record.response_model && record.response_model !== record.model)
       ? [
@@ -674,24 +673,17 @@ function RecordRows({
           onToggle();
         }}
         aria-expanded={expanded}
-        className="cursor-pointer aria-expanded:bg-muted/40"
+        className={cn(
+          "cursor-pointer",
+          record.failed ? "bg-destructive/10 hover:bg-destructive/15" : "hover:bg-muted/40",
+          "aria-expanded:bg-muted/40",
+        )}
       >
-        <TableCell className="whitespace-nowrap py-3 pl-4 font-mono text-xs text-muted-foreground">
-          {formatDateTime(record.requested_at)}
-        </TableCell>
-        <TableCell className="py-3">
-          <span
-            className={cn(
-              "inline-flex items-center gap-1 font-mono tabular-nums",
-              record.failed ? "text-destructive" : "text-success",
-            )}
-          >
-            {record.failed ? <AlertCircle className="size-3" /> : <CheckCircle2 className="size-3" />}
-            {record.status_code || (record.failed ? 500 : 200)}
-          </span>
+        <TableCell className="w-44 whitespace-nowrap py-3 pl-4 font-mono text-xs text-muted-foreground">
+          {formatDateTimeFull(record.requested_at)}
         </TableCell>
         <TableCell className="py-3 font-medium">
-          <div className="flex max-w-48 flex-col">
+          <div className="flex max-w-112 flex-col">
             <span className="truncate" title={record.model}>
               {record.model}
             </span>
@@ -702,38 +694,38 @@ function RecordRows({
             )}
           </div>
         </TableCell>
-        <TableCell className="max-w-24 py-3 text-muted-foreground">
+        <TableCell className="max-w-64 py-3 text-muted-foreground">
           <span className="block truncate" title={record.provider || undefined}>
             {record.provider || "-"}
           </span>
         </TableCell>
-        <TableCell className="w-32 py-3 text-right font-mono tabular-nums">
+        <TableCell className="w-56 py-3 text-right font-mono tabular-nums">
           <div className="flex items-center justify-end gap-1">
             <span className="text-muted-foreground" title={t("records.detail.token_input")}>
-              ↓{formatTokens(record.input_tokens)}
+              ↓{formatNumber(record.input_tokens)}
             </span>
             <span className="text-muted-foreground">/</span>
             <span className="text-muted-foreground" title={t("records.detail.token_output")}>
-              ↑{formatTokens(record.output_tokens)}
+              ↑{formatNumber(record.output_tokens)}
             </span>
             <span className="text-muted-foreground">/</span>
             <span className="font-semibold text-foreground" title={t("records.detail.token_total")}>
-              Σ{formatTokens(record.total_tokens)}
+              Σ{formatNumber(record.total_tokens)}
             </span>
           </div>
           {(record.cache_read_tokens > 0 || record.cache_creation_tokens > 0) && (
             <div className="text-xs text-muted-foreground">
               {t("records.row.cache", {
-                read: formatTokens(record.cache_read_tokens),
-                write: formatTokens(record.cache_creation_tokens),
+                read: formatNumber(record.cache_read_tokens),
+                write: formatNumber(record.cache_creation_tokens),
               })}
             </div>
           )}
         </TableCell>
-        <TableCell className="w-24 py-3 whitespace-nowrap text-right font-mono tabular-nums">
+        <TableCell className="w-32 py-3 whitespace-nowrap text-right font-mono tabular-nums">
           <CostCell cost={cost} />
         </TableCell>
-        <TableCell className="w-28 py-3 pr-4 whitespace-nowrap text-right font-mono tabular-nums">
+        <TableCell className="w-40 py-3 pr-4 whitespace-nowrap text-right font-mono tabular-nums">
           <div className={toneTextClass(latencyTone(record.latency_ms))}>{formatDuration(record.latency_ms)}</div>
           {record.stream && record.ttft_ms > 0 && (
             <div className="text-xs text-muted-foreground">

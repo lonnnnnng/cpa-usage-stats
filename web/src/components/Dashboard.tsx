@@ -113,7 +113,7 @@ export function Dashboard() {
   }, [savingKey, loading, unauthorized]);
 
   return (
-    <div className="mx-auto max-w-7xl space-y-4 p-4 md:p-6">
+    <div className="w-full max-w-none space-y-4 p-4 md:p-6">
       <header className="flex flex-col gap-3 border-b pb-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-center gap-2.5">
           <Logo className="size-8 shrink-0 rounded-md" />
