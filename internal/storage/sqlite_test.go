@@ -156,6 +156,35 @@ func TestStorageStatsAndVacuum(t *testing.T) {
 	}
 }
 
+func TestDeleteRangeRemovesOnlySelectedInterval(t *testing.T) {
+	store, err := New(filepath.Join(t.TempDir(), "usage.db"))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer store.Close()
+
+	now := time.Now()
+	if err := store.InsertBatch([]model.UsageRecord{
+		{RequestID: "old", RequestedAt: now.Add(-48 * time.Hour)},
+		{RequestID: "keep", RequestedAt: now.Add(-12 * time.Hour)},
+		{RequestID: "today", RequestedAt: now},
+	}); err != nil {
+		t.Fatalf("InsertBatch: %v", err)
+	}
+	start := now.Add(-24 * time.Hour)
+	deleted, err := store.DeleteRange(&start, nil)
+	if err != nil || deleted != 2 {
+		t.Fatalf("DeleteRange = %d, %v; want 2", deleted, err)
+	}
+	list, err := store.GetRecords(model.UsageFilter{Page: 1, PageSize: 10})
+	if err != nil {
+		t.Fatalf("GetRecords: %v", err)
+	}
+	if list.Total != 1 || list.Items[0].RequestID != "old" {
+		t.Fatalf("remaining records = %+v; want only old", list.Items)
+	}
+}
+
 // TestLegacySchemaUpgraded verifies that a database created by an older plugin
 // keeps its rows and has the missing columns added on open, instead of being
 // dropped and rebuilt.

@@ -137,6 +137,13 @@ export interface StorageStats {
   retention_days: number;
 }
 
+export type StorageCleanupRange = "today" | "7d" | "30d" | "all";
+
+export interface StorageCleanupResponse {
+  deleted_records: number;
+  stats: StorageStats;
+}
+
 /** Runtime counters that live outside the database. */
 export interface RuntimeStats {
   dropped_records: number;

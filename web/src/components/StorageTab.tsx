@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Database, Recycle, RefreshCw } from "lucide-react";
+import { Database, Eraser, Recycle, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Alert, AlertTitle } from "@/components/ui/alert";
@@ -16,9 +16,9 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useFormat } from "@/hooks/use-format";
 import { useI18n } from "@/i18n/context";
-import { fetchStorage, keyFingerprint, reclaimStorage } from "@/lib/api";
+import { clearStorage, fetchStorage, keyFingerprint, reclaimStorage } from "@/lib/api";
 import { cn, formatBytes, formatDateTimeFull } from "@/lib/utils";
-import type { StorageStats } from "@/types";
+import type { StorageCleanupRange, StorageStats } from "@/types";
 
 function StatCell({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
@@ -46,7 +46,9 @@ export function StorageTab({ apiKey }: { apiKey: string }) {
   const { t } = useI18n();
   const { formatNumber } = useFormat();
   const queryClient = useQueryClient();
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [reclaimOpen, setReclaimOpen] = useState(false);
+  const [clearOpen, setClearOpen] = useState(false);
+  const [cleanupRange, setCleanupRange] = useState<StorageCleanupRange>("today");
 
   const queryKey = ["usage-storage", keyFingerprint(apiKey)];
   const query = useQuery<StorageStats>({
@@ -61,14 +63,30 @@ export function StorageTab({ apiKey }: { apiKey: string }) {
     onSuccess: (stats) => {
       const before = query.data?.total_size_bytes ?? 0;
       queryClient.setQueryData(queryKey, stats);
-      setConfirmOpen(false);
+      setReclaimOpen(false);
       toast.success(t("storage.reclaimed", { size: formatBytes(Math.max(0, before - stats.total_size_bytes)) }));
     },
     onError: (error: Error) => {
-      setConfirmOpen(false);
+      setReclaimOpen(false);
       toast.error(t("storage.reclaim_failed", { message: error.message }));
     },
   });
+
+  const cleanup = useMutation({
+    mutationFn: () => clearStorage(apiKey, cleanupRange),
+    onSuccess: ({ deleted_records, stats }) => {
+      queryClient.setQueryData(queryKey, stats);
+      void queryClient.invalidateQueries({ queryKey: ["usage"] });
+      setClearOpen(false);
+      toast.success(t("storage.cleared", { count: formatNumber(deleted_records) }));
+    },
+    onError: (error: Error) => {
+      setClearOpen(false);
+      toast.error(t("storage.clear_failed", { message: error.message }));
+    },
+  });
+
+  const busy = reclaim.isPending || cleanup.isPending;
 
   const data = query.data;
   const retention =
@@ -94,11 +112,21 @@ export function StorageTab({ apiKey }: { apiKey: string }) {
               variant="outline"
               size="sm"
               className="gap-1.5"
-              disabled={!data || reclaim.isPending}
-              onClick={() => setConfirmOpen(true)}
+              disabled={!data || busy}
+              onClick={() => setClearOpen(true)}
             >
-              {reclaim.isPending ? <RefreshCw className="animate-spin" /> : <Recycle />}
-              {reclaim.isPending ? t("storage.reclaiming") : t("storage.reclaim")}
+              {busy ? <RefreshCw className="animate-spin" /> : <Eraser />}
+              {busy ? t("storage.clearing") : t("storage.clear_data")}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              disabled={!data || busy}
+              onClick={() => setReclaimOpen(true)}
+            >
+              <Recycle />
+              {t("storage.reclaim")}
             </Button>
           </div>
         </CardHeader>
@@ -147,17 +175,54 @@ export function StorageTab({ apiKey }: { apiKey: string }) {
         </CardContent>
       </Card>
 
-      <Dialog open={confirmOpen} onOpenChange={(open) => !reclaim.isPending && setConfirmOpen(open)}>
+      <Dialog open={clearOpen} onOpenChange={(open) => !busy && setClearOpen(open)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("storage.clear_title")}</DialogTitle>
+            <DialogDescription>{t("storage.clear_desc")}</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {(["today", "7d", "30d", "all"] as StorageCleanupRange[]).map((range) => (
+              <Button
+                key={range}
+                variant={cleanupRange === range ? "default" : "outline"}
+                className={cn(
+                  range === "all" && cleanupRange === range && "bg-destructive text-white hover:bg-destructive/90",
+                )}
+                onClick={() => setCleanupRange(range)}
+                disabled={busy}
+              >
+                {t(`storage.clear_${range}`)}
+              </Button>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setClearOpen(false)} disabled={busy}>
+              {t("common.cancel")}
+            </Button>
+            <Button
+              variant={cleanupRange === "all" ? "destructive" : "default"}
+              onClick={() => cleanup.mutate()}
+              disabled={busy}
+            >
+              {cleanup.isPending && <RefreshCw className="animate-spin" />}
+              {cleanup.isPending ? t("storage.clearing") : t("storage.clear_confirm")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={reclaimOpen} onOpenChange={(open) => !busy && setReclaimOpen(open)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t("storage.reclaim_title")}</DialogTitle>
             <DialogDescription>{t("storage.reclaim_desc")}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmOpen(false)} disabled={reclaim.isPending}>
+            <Button variant="outline" onClick={() => setReclaimOpen(false)} disabled={busy}>
               {t("common.cancel")}
             </Button>
-            <Button onClick={() => reclaim.mutate()} disabled={reclaim.isPending}>
+            <Button onClick={() => reclaim.mutate()} disabled={busy}>
               {reclaim.isPending && <RefreshCw className="animate-spin" />}
               {reclaim.isPending ? t("storage.reclaiming") : t("storage.reclaim_confirm")}
             </Button>

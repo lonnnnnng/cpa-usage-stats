@@ -1,4 +1,12 @@
-import type { OptionsResponse, RecordListResponse, RuntimeStats, StorageStats, SummaryData } from "@/types";
+import type {
+  OptionsResponse,
+  RecordListResponse,
+  RuntimeStats,
+  StorageCleanupRange,
+  StorageCleanupResponse,
+  StorageStats,
+  SummaryData,
+} from "@/types";
 import { resolveApiBase } from "./auth.ts";
 
 const API_BASE = "/v0/management/plugins/cpa-usage-stats";
@@ -96,6 +104,11 @@ export function fetchStorage(key: string): Promise<StorageStats> {
 /** 执行 VACUUM 回收空闲页，返回回收后的最新占用。 */
 export function reclaimStorage(key: string): Promise<StorageStats> {
   return request<StorageStats>(key, "/storage/reclaim", {}, "POST");
+}
+
+/** 删除指定时间范围的用量记录并压缩数据库。 */
+export function clearStorage(key: string, range: StorageCleanupRange): Promise<StorageCleanupResponse> {
+  return request<StorageCleanupResponse>(key, "/storage/clear", { range }, "POST");
 }
 
 /**

@@ -296,7 +296,18 @@
     "reclaiming": "回收中...",
     "reclaimed": "已回收 {{size}}",
     "reclaim_failed": "回收失败：{{message}}",
-    "load_failed": "空间信息加载失败：{{message}}"
+    "load_failed": "空间信息加载失败：{{message}}",
+    "clear_data": "清理数据",
+    "clearing": "清理中...",
+    "clear_title": "清理用量数据？",
+    "clear_desc": "删除选定时间范围内的调用明细，删除后无法恢复；数据库会自动压缩。请确认清理范围。",
+    "clear_today": "今天",
+    "clear_7d": "近 7 天",
+    "clear_30d": "近 30 天",
+    "clear_all": "全部数据",
+    "clear_confirm": "确认清理",
+    "cleared": "已清理 {{count}} 条记录",
+    "clear_failed": "清理失败：{{message}}"
   },
   "auth": {
     "title": "需要管理密钥",

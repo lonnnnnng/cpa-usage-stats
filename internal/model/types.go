@@ -286,3 +286,10 @@ type StorageStats struct {
 	ReclaimableBytes int64  `json:"reclaimable_bytes"`
 	RetentionDays    int    `json:"retention_days"`
 }
+
+// StorageCleanupResponse reports the number of deleted records and the
+// resulting database footprint after an explicit dashboard cleanup. 作者：long
+type StorageCleanupResponse struct {
+	DeletedRecords int64         `json:"deleted_records"`
+	Stats          *StorageStats `json:"stats"`
+}

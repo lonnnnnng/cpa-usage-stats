@@ -215,6 +215,7 @@ func (p *Instance) handleManagementRegister() ([]byte, error) {
 			{Method: http.MethodGet, Path: handler.APIBasePath + "/stats", Description: "运行时计数（丢弃记录、队列压力）"},
 			{Method: http.MethodGet, Path: handler.APIBasePath + "/storage", Description: "数据库空间占用"},
 			{Method: http.MethodPost, Path: handler.APIBasePath + "/storage/reclaim", Description: "回收数据库空间"},
+			{Method: http.MethodPost, Path: handler.APIBasePath + "/storage/clear", Description: "按时间范围清理用量数据"},
 		},
 	})
 }
@@ -235,6 +236,20 @@ func (p *Instance) handleManagementHandle(payload []byte) ([]byte, error) {
 	var req model.ManagementRequest
 	if err := json.Unmarshal(payload, &req); err != nil {
 		return errorEnvelope("invalid_management_request", err.Error()), nil
+	}
+
+	// 清理前先独占实例并停止 worker，确保已排队记录全部落盘后再删除，
+	// 避免清理刚结束又被异步写回。清理完成后立即恢复 worker。作者：long
+	if req.Path == handler.APIBasePath+"/storage/clear" {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		if p.worker != nil {
+			p.worker.Stop()
+			p.worker = nil
+		}
+		response := p.handleManagementLocked(req)
+		p.worker = worker.New(p.cfg, p.store)
+		return okEnvelope(response)
 	}
 
 	p.mu.RLock()

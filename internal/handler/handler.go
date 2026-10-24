@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -66,10 +67,57 @@ func Handle(store *storage.Storage, html []byte, req model.ManagementRequest, re
 			return jsonError(http.StatusInternalServerError, "query_storage_failed", err.Error())
 		}
 		return jsonOK(stats)
+	case "/storage/clear":
+		if req.Method != http.MethodPost {
+			return jsonError(http.StatusMethodNotAllowed, "method_not_allowed", "use POST")
+		}
+		start, end, err := parseCleanupRange(req.Query)
+		if err != nil {
+			return jsonError(http.StatusBadRequest, "invalid_cleanup_range", err.Error())
+		}
+		deleted, err := store.DeleteRange(start, end)
+		if err != nil {
+			return jsonError(http.StatusInternalServerError, "clear_failed", err.Error())
+		}
+		if err := store.Vacuum(); err != nil {
+			return jsonError(http.StatusInternalServerError, "clear_reclaim_failed", err.Error())
+		}
+		stats, err := store.Stats(retentionDays)
+		if err != nil {
+			return jsonError(http.StatusInternalServerError, "query_storage_failed", err.Error())
+		}
+		return jsonOK(model.StorageCleanupResponse{DeletedRecords: deleted, Stats: stats})
 	default:
 		return jsonError(http.StatusNotFound, "not_found", "unknown endpoint")
 	}
 }
+
+// parseCleanupRange uses the server's local calendar so "today" matches the
+// timestamps shown by the dashboard. An omitted range is rejected to avoid an
+// accidental full-database delete from a malformed management request. 作者：long
+func parseCleanupRange(q map[string][]string) (*time.Time, *time.Time, error) {
+	rangeValue := ""
+	if values := q["range"]; len(values) > 0 {
+		rangeValue = strings.TrimSpace(values[0])
+	}
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	tomorrow := today.AddDate(0, 0, 1)
+	switch rangeValue {
+	case "today":
+		return &today, &tomorrow, nil
+	case "7d":
+		return timePtr(today.AddDate(0, 0, -6)), &tomorrow, nil
+	case "30d":
+		return timePtr(today.AddDate(0, 0, -29)), &tomorrow, nil
+	case "all":
+		return nil, nil, nil
+	default:
+		return nil, nil, fmt.Errorf("range must be today, 7d, 30d, or all")
+	}
+}
+
+func timePtr(value time.Time) *time.Time { return &value }
 
 func htmlResponse(body []byte) model.ManagementResponse {
 	headers := http.Header{}

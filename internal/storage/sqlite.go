@@ -931,3 +931,35 @@ func (s *Storage) CleanRetention(retentionDays int) (int64, error) {
 	}
 	return res.RowsAffected()
 }
+
+// DeleteRange deletes records in the half-open local-time interval [start,end).
+// Nil boundaries mean unbounded, which is used by the explicit "all" cleanup.
+// The caller performs VACUUM separately so the deleted count can be reported
+// before the database is compacted. 作者：long
+func (s *Storage) DeleteRange(start, end *time.Time) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	where := ""
+	args := []any{}
+	if start != nil {
+		where = "requested_at >= ?"
+		args = append(args, start.Local().Format(timeLayout))
+	}
+	if end != nil {
+		if where != "" {
+			where += " AND "
+		}
+		where += "requested_at < ?"
+		args = append(args, end.Local().Format(timeLayout))
+	}
+	query := "DELETE FROM usage_records"
+	if where != "" {
+		query += " WHERE " + where
+	}
+	res, err := s.db.Exec(query, args...)
+	if err != nil {
+		return 0, fmt.Errorf("delete usage records: %w", err)
+	}
+	return res.RowsAffected()
+}

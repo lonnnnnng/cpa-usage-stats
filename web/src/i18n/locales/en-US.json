@@ -296,7 +296,18 @@
     "reclaiming": "Reclaiming...",
     "reclaimed": "Reclaimed {{size}}",
     "reclaim_failed": "Failed to reclaim space: {{message}}",
-    "load_failed": "Failed to load storage info: {{message}}"
+    "load_failed": "Failed to load storage info: {{message}}",
+    "clear_data": "Clear data",
+    "clearing": "Clearing...",
+    "clear_title": "Clear usage data?",
+    "clear_desc": "Calls in the selected range will be permanently deleted and the database compacted. Confirm the cleanup range.",
+    "clear_today": "Today",
+    "clear_7d": "Last 7 days",
+    "clear_30d": "Last 30 days",
+    "clear_all": "All data",
+    "clear_confirm": "Clear now",
+    "cleared": "Cleared {{count}} records",
+    "clear_failed": "Failed to clear data: {{message}}"
   },
   "auth": {
     "title": "Management key required",

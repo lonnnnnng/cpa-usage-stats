@@ -3,6 +3,7 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterEach, mock, test } from "node:test";
 import {
+  clearStorage,
   fetchOptions,
   fetchRecords,
   fetchStats,
@@ -24,6 +25,7 @@ const endpoints = [
   { path: "/stats", method: "GET", call: fetchStats },
   { path: "/storage", method: "GET", call: fetchStorage },
   { path: "/storage/reclaim", method: "POST", call: reclaimStorage },
+  { path: "/storage/clear", method: "POST", call: (value: string) => clearStorage(value, "all") },
 ];
 
 const browserGlobals = ["window", "localStorage", "sessionStorage"] as const;
