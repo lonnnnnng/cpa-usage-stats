@@ -4,7 +4,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useFormat } from "@/hooks/use-format";
 import { useI18n } from "@/i18n/context";
 import { costPerToken, type PricingTable } from "@/lib/pricing";
-import { cn } from "@/lib/utils";
+import { cn, formatDisplayDateKey, parseBackendTimestamp } from "@/lib/utils";
 import type { SummaryData } from "@/types";
 
 export type HeatmapMetric = "tokens" | "requests" | "cost";
@@ -19,20 +19,20 @@ const DAY_MS = 86_400_000;
 const LEVEL_CLASS = ["bg-muted/60", "bg-chart-3/25", "bg-chart-3/45", "bg-chart-3/70", "bg-chart-3"] as const;
 
 function startOfDay(date: Date): Date {
-  const next = new Date(date);
-  next.setHours(0, 0, 0, 0);
-  return next;
+  // 作者：long。使用北京时间的日期并锚定在 UTC 中午，避免 UTC+8 的午夜落在前一天/后一天。
+  const [year, month, day] = formatDisplayDateKey(date).split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day, 12));
 }
 
 /** 热力图按周列排布，这里取包含该日的周一作为列起点。 */
 function startOfWeek(date: Date): Date {
   const next = startOfDay(date);
-  next.setDate(next.getDate() - ((next.getDay() + 6) % 7));
+  next.setUTCDate(next.getUTCDate() - ((next.getUTCDay() + 6) % 7));
   return next;
 }
 
 function dayKey(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  return formatDisplayDateKey(date);
 }
 
 type Cell = { key: string; date: Date; value: number; level: number };
@@ -62,8 +62,8 @@ export function ActivityHeatmap({
     const hourly = summary?.bucket === "hour";
     const valueByDay = new Map<string, number>();
     for (const point of trend) {
-      const date = new Date(point.bucket.replace(" ", "T"));
-      if (Number.isNaN(date.getTime())) continue;
+      const date = parseBackendTimestamp(point.bucket, hourly ? "hour" : "day");
+      if (!date) continue;
       const key = dayKey(date);
       const value =
         metric === "tokens"
@@ -95,8 +95,8 @@ export function ActivityHeatmap({
         column.push({ key, date, value, level: 0 });
       }
       const first = column[0].date;
-      if (first.getDate() <= DAYS) {
-        labels.push({ index: week, text: `${first.getMonth() + 1}/${first.getDate()}` });
+      if (first.getUTCDate() <= DAYS) {
+        labels.push({ index: week, text: `${first.getUTCMonth() + 1}/${first.getUTCDate()}` });
       }
       matrix.push(column);
     }

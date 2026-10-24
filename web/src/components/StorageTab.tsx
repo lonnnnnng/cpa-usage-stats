@@ -17,7 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useFormat } from "@/hooks/use-format";
 import { useI18n } from "@/i18n/context";
 import { fetchStorage, keyFingerprint, reclaimStorage } from "@/lib/api";
-import { cn, formatBytes } from "@/lib/utils";
+import { cn, formatBytes, formatDateTimeFull } from "@/lib/utils";
 import type { StorageStats } from "@/types";
 
 function StatCell({ label, value, hint }: { label: string; value: string; hint?: string }) {
@@ -39,10 +39,6 @@ function InfoRow({ label, value, mono = true }: { label: string; value: string; 
       </dd>
     </div>
   );
-}
-
-function formatStoredTime(value: string | undefined): string {
-  return value ? value.replace("T", " ").slice(0, 19) : "-";
 }
 
 /** 空间占用：数据库文件大小、记录范围、保留策略与手动回收。 */
@@ -137,8 +133,8 @@ export function StorageTab({ apiKey }: { apiKey: string }) {
               <dl className="grid gap-x-6 gap-y-1.5 text-xs sm:grid-cols-2">
                 <InfoRow label={t("storage.path")} value={data.db_path} />
                 <InfoRow label={t("storage.retention")} value={retention} mono={false} />
-                <InfoRow label={t("storage.oldest")} value={formatStoredTime(data.oldest_record_at)} />
-                <InfoRow label={t("storage.newest")} value={formatStoredTime(data.newest_record_at)} />
+                <InfoRow label={t("storage.oldest")} value={formatDateTimeFull(data.oldest_record_at)} />
+                <InfoRow label={t("storage.newest")} value={formatDateTimeFull(data.newest_record_at)} />
                 <InfoRow label={t("storage.reclaimable")} value={formatBytes(data.reclaimable_bytes)} />
               </dl>
 

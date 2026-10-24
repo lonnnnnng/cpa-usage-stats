@@ -29,16 +29,94 @@ export function formatBytes(bytes: number): string {
   return `${unit === 0 || value >= 100 ? value.toFixed(0) : value.toFixed(1)} ${units[unit]}`;
 }
 
-/** "2026-09-28 15:04:05.000" → "09-28 15:04:05" */
-export function formatDateTime(stored: string): string {
-  if (!stored) return "-";
-  return stored.replace("T", " ").slice(5, 19);
+const DISPLAY_TIME_ZONE = "Asia/Shanghai";
+const DISPLAY_TIME_FORMATTER = new Intl.DateTimeFormat("en-CA", {
+  timeZone: DISPLAY_TIME_ZONE,
+  calendar: "gregory",
+  numberingSystem: "latn",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hourCycle: "h23",
+});
+
+type DisplayParts = {
+  year: string;
+  month: string;
+  day: string;
+  hour: string;
+  minute: string;
+  second: string;
+};
+
+function displayParts(date: Date): DisplayParts {
+  const parts = Object.fromEntries(
+    DISPLAY_TIME_FORMATTER.formatToParts(date).map(({ type, value }) => [type, value]),
+  ) as Partial<DisplayParts>;
+  return {
+    year: parts.year ?? "",
+    month: parts.month ?? "",
+    day: parts.day ?? "",
+    hour: parts.hour ?? "",
+    minute: parts.minute ?? "",
+    second: parts.second ?? "",
+  };
 }
 
-/** 小时桶 "2026-09-28 15" → "15:00"；天桶 → "09-28" */
+/**
+ * 后端把无时区的 SQLite 时间作为墙上时间返回；这里按 UTC 解释，统一换算成北京时间。
+ * 已带 Z 或 offset 的 RFC3339 时间则直接按其绝对时刻处理，避免重复加 8 小时。
+ */
+export function parseBackendTimestamp(value: string, granularity?: "hour" | "day"): Date | null {
+  const trimmed = (value ?? "").trim();
+  if (!trimmed) return null;
+
+  let normalized = trimmed.replace(" ", "T");
+  const hasTimeZone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized);
+  if (!hasTimeZone) {
+    if (granularity === "hour" && /^\d{4}-\d{2}-\d{2}T\d{2}$/.test(normalized)) {
+      normalized += ":00:00";
+    } else if (granularity === "day" && /^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+      normalized += "T00:00:00";
+    }
+    normalized += "Z";
+  }
+
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+/** "2026-09-28T15:04:05Z" → "09-28 23:04:05"（北京时间） */
+export function formatDateTime(stored: string): string {
+  const date = parseBackendTimestamp(stored);
+  if (!date) return "-";
+  const parts = displayParts(date);
+  return `${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
+}
+
+/** 完整日期时间，用于存储统计中的最早/最新记录。 */
+export function formatDateTimeFull(stored: string | undefined): string {
+  const date = parseBackendTimestamp(stored ?? "");
+  if (!date) return "-";
+  const parts = displayParts(date);
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
+}
+
+/** 将时间转换为北京时间的日历日期，供热力图按天聚合。 */
+export function formatDisplayDateKey(date: Date): string {
+  const parts = displayParts(date);
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+/** 小时桶 "2026-09-28 15" → "23:00"；天桶 → "09-28"（北京时间） */
 export function formatBucket(bucket: string, hourly: boolean): string {
-  if (!bucket) return "-";
-  return hourly ? `${bucket.slice(11, 13)}:00` : bucket.slice(5, 10);
+  const date = parseBackendTimestamp(bucket, hourly ? "hour" : "day");
+  if (!date) return "-";
+  const parts = displayParts(date);
+  return hourly ? `${parts.hour}:00` : `${parts.month}-${parts.day}`;
 }
 
 /** 脱敏 API Key：保留可辨识前缀与末 4 位 */
