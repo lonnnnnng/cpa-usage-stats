@@ -10,7 +10,7 @@ Forked from [tom2almighty/cpa-usage-stats](https://github.com/tom2almighty/cpa-u
 
 - Management requests are same-origin only and reject redirects. The `api_base` page parameter, which could send a management key to another server, is removed.
 - Runtime statistics use per-instance snapshots, avoiding recursive read-lock deadlocks during concurrent statistics queries and reconfiguration/quiesce.
-- Added frontend security and backend concurrency regression tests. The upstream store source and Releases below do not include these fork fixes; build this repository to use the fixed version.
+- Added frontend security and backend concurrency regression tests. This repository's store source and Releases distribute the fixed fork; the original upstream source does not include this fork's independent changes.
 
 ## Overview
 
@@ -41,19 +41,19 @@ Frontend stack: React 19, TypeScript, Vite, Tailwind CSS v4, shadcn, Recharts, i
 
 ### Install from the plugin store
 
-Once listed in the official plugin store, search for `CPA Usage Stats` in the Management Center. Alternatively, add this repository's store source to CPA:
+Add this repository's store source to CPA, then select `CPA Usage Stats` from that source in the Management Center. The official source may list a plugin with the same name; it is not a substitute for this fork source:
 
 ```yaml
 plugins:
   enabled: true
   dir: "plugins"
   store-sources:
-    - "https://raw.githubusercontent.com/tom2almighty/cpa-usage-stats/main/plugin-store/registry.json"
+    - "https://raw.githubusercontent.com/lonnnnnng/cpa-usage-stats/main/plugin-store/registry.json"
 ```
 
 ### Manual install
 
-Download the archive for your platform from [Releases](https://github.com/tom2almighty/cpa-usage-stats/releases) and place `cpa-usage-stats.so` (Linux), `.dylib` (macOS) or `.dll` (Windows) into CPA's `plugins` directory. For Docker, place the shared library in the mounted plugin directory.
+Download the archive for your platform from [this fork's Releases](https://github.com/lonnnnnng/cpa-usage-stats/releases), verify it against `checksums.txt`, and place `cpa-usage-stats.so` (Linux), `.dylib` (macOS) or `.dll` (Windows) into CPA's `plugins` directory. For Docker, place the shared library in the mounted plugin directory. Manual installation does not establish store provenance; prefer the store source above if you want to update through the store later.
 
 ```bash
 mkdir -p /path/to/cliproxyapi/plugins
@@ -83,10 +83,12 @@ plugins:
 ### Local packaging
 
 ```bash
-./scripts/package-release.sh 0.1.7
+./scripts/package-release.sh 0.5.4
 ```
 
 Artifacts are written to `release-dist/` with platform archives and `checksums.txt`.
+
+Pushing a `v*` tag runs the Release workflow and publishes platform packages. Release can also be rerun manually in GitHub Actions, but the selected ref must be a version tag. CI supports manual runs as well.
 
 ### Usage
 

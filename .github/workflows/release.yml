@@ -1,6 +1,7 @@
 name: Release
 
 on:
+  workflow_dispatch:
   push:
     tags:
       - 'v*'
@@ -10,6 +11,8 @@ permissions:
 
 jobs:
   build-frontend:
+    # 作者：long。手动重跑也必须选择版本标签，避免将 main 误当成可安装版本发布。
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -29,6 +32,8 @@ jobs:
         working-directory: web
         run: |
           pnpm install --frozen-lockfile
+          pnpm run test
+          pnpm run check
           pnpm run build
       - name: Upload frontend artifact
         uses: actions/upload-artifact@v7

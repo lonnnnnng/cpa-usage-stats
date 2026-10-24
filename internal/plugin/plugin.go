@@ -139,8 +139,8 @@ func (p *Instance) handleRegister(payload []byte) ([]byte, error) {
 			Name:             "cpa-usage-stats",
 			Version:          Version,
 			Author:           "tom2almighty",
-			GitHubRepository: "https://github.com/tom2almighty/cpa-usage-stats",
-			Logo:             "https://raw.githubusercontent.com/tom2almighty/cpa-usage-stats/main/assets/logo.svg",
+			GitHubRepository: "https://github.com/lonnnnnng/cpa-usage-stats",
+			Logo:             "https://raw.githubusercontent.com/lonnnnnng/cpa-usage-stats/main/assets/logo.svg",
 			ConfigFields:     configFields,
 		},
 		Capabilities: map[string]bool{

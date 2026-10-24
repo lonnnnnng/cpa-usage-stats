@@ -10,7 +10,7 @@ CLIProxyAPI（CPA 8.0+）用量统计插件：通过 usage 插件接口采集请
 
 - 管理请求固定同源，并拒绝重定向，移除可能将管理密钥发送至外站的 `api_base` 页面参数。
 - 运行时统计通过实例快照传递，修复统计查询与重配置/暂停并发时递归读锁可能造成的死锁。
-- 增加前端安全与后端并发回归测试。下文上游商店源及 Releases 不包含本 fork 的修复；使用修复版请从本仓库源码构建。
+- 增加前端安全与后端并发回归测试。本仓库的插件源与 Releases 指向 fork 修复版；原作者的上游源不包含本 fork 的独立修复。
 
 ## 项目简介
 
@@ -41,19 +41,19 @@ cd web && pnpm install --frozen-lockfile && pnpm run dev  # 单独调试前端
 
 ### 插件商店安装
 
-插件收录到官方插件商店后，在管理中心搜索 `CPA Usage Stats` 安装。也可以在 CPA 中添加本仓库的商店源：
+在 CPA 中添加本仓库的插件源，然后在管理中心插件商店选择该来源的 `CPA Usage Stats` 安装。官方源可能也包含同名插件，不能用官方源替代此 fork 源：
 
 ```yaml
 plugins:
   enabled: true
   dir: "plugins"
   store-sources:
-    - "https://raw.githubusercontent.com/tom2almighty/cpa-usage-stats/main/plugin-store/registry.json"
+    - "https://raw.githubusercontent.com/lonnnnnng/cpa-usage-stats/main/plugin-store/registry.json"
 ```
 
 ### 手动安装
 
-从 [Releases](https://github.com/tom2almighty/cpa-usage-stats/releases) 下载对应平台的压缩包，解压得到 `cpa-usage-stats.so`（Linux）/ `.dylib`（macOS）/ `.dll`（Windows），放入 CPA 的 `plugins` 目录。Docker 部署时，把动态库放进映射的插件目录。
+从 [本 fork 的 Releases](https://github.com/lonnnnnng/cpa-usage-stats/releases) 下载对应平台的压缩包，先按 `checksums.txt` 校验，再解压得到 `cpa-usage-stats.so`（Linux）/ `.dylib`（macOS）/ `.dll`（Windows），放入 CPA 的 `plugins` 目录。Docker 部署时，把动态库放进映射的插件目录。手动安装不建立商店来源记录；需要以后在商店更新时，优先使用上面的插件源安装。
 
 ```bash
 mkdir -p /path/to/cliproxyapi/plugins
@@ -83,10 +83,12 @@ plugins:
 ### 本地打包
 
 ```bash
-./scripts/package-release.sh 0.1.7
+./scripts/package-release.sh 0.5.4
 ```
 
 产物写入 `release-dist/`，包含平台压缩包与 `checksums.txt`。
+
+推送 `v*` 标签会运行 Release 工作流并发布各平台安装包。也可在 GitHub Actions 手动重跑 Release，但必须选择对应版本标签；CI 工作流支持手动运行。
 
 ### 使用
 
