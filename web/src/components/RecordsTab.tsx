@@ -29,6 +29,7 @@ import type { OptionsResponse, RecordListResponse, RecordsFilters, StoredRecord 
 interface RecordsTabProps {
   data: RecordListResponse | null;
   loading: boolean;
+  refreshing?: boolean;
   options: OptionsResponse;
   filters: RecordsFilters;
   onFiltersChange: (filters: RecordsFilters) => void;
@@ -326,6 +327,7 @@ function CompactItem({ label, value, badge }: { label: string; value: string; ba
 export function RecordsTab({
   data,
   loading,
+  refreshing = false,
   options,
   filters,
   onFiltersChange,
@@ -493,48 +495,58 @@ export function RecordsTab({
             </EmptyHeader>
           </Empty>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-44 pl-4">{t("records.th.time")}</TableHead>
-                <TableHead className="w-[24%]">{t("records.th.model")}</TableHead>
-                <TableHead className="w-[16%]">{t("records.th.provider")}</TableHead>
-                <TableHead className="w-56 text-right">{t("records.th.tokens")}</TableHead>
-                <TableHead className="w-32 text-right">{t("records.th.cost")}</TableHead>
-                <TableHead className="w-40 pr-4 text-right">{t("records.th.latency")}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading
-                ? ROW_SKELETON_KEYS.map((rowKey) => (
-                    <TableRow key={rowKey}>
-                      <TableCell colSpan={6} className="px-4">
-                        <Skeleton className="h-5 w-full" />
-                      </TableCell>
-                    </TableRow>
-                  ))
-                : items.map((record) => {
-                    const expanded = expandedId === record.id;
-                    const cost = recordCost(pricing.table, record);
-                    const generationMs = record.latency_ms - record.ttft_ms;
-                    const throughput =
-                      record.stream && generationMs > 100 && record.output_tokens > 0
-                        ? (record.output_tokens / (generationMs / 1000)).toFixed(1)
-                        : null;
+          <div className="relative" aria-busy={refreshing}>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-44 pl-4">{t("records.th.time")}</TableHead>
+                  <TableHead className="w-[24%]">{t("records.th.model")}</TableHead>
+                  <TableHead className="w-[16%]">{t("records.th.provider")}</TableHead>
+                  <TableHead className="w-56 text-right">{t("records.th.tokens")}</TableHead>
+                  <TableHead className="w-32 text-right">{t("records.th.cost")}</TableHead>
+                  <TableHead className="w-40 pr-4 text-right">{t("records.th.latency")}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading
+                  ? ROW_SKELETON_KEYS.map((rowKey) => (
+                      <TableRow key={rowKey}>
+                        <TableCell colSpan={6} className="px-4">
+                          <Skeleton className="h-5 w-full" />
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  : items.map((record) => {
+                      const expanded = expandedId === record.id;
+                      const cost = recordCost(pricing.table, record);
+                      const generationMs = record.latency_ms - record.ttft_ms;
+                      const throughput =
+                        record.stream && generationMs > 100 && record.output_tokens > 0
+                          ? (record.output_tokens / (generationMs / 1000)).toFixed(1)
+                          : null;
 
-                    return (
-                      <RecordRows
-                        key={record.id}
-                        record={record}
-                        cost={cost}
-                        expanded={expanded}
-                        throughput={throughput}
-                        onToggle={() => setExpandedId(expanded ? null : record.id)}
-                      />
-                    );
-                  })}
-            </TableBody>
-          </Table>
+                      return (
+                        <RecordRows
+                          key={record.id}
+                          record={record}
+                          cost={cost}
+                          expanded={expanded}
+                          throughput={throughput}
+                          onToggle={() => setExpandedId(expanded ? null : record.id)}
+                        />
+                      );
+                    })}
+              </TableBody>
+            </Table>
+            {refreshing && (
+              <>
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-0.5 animate-pulse bg-primary/70" />
+                <span className="sr-only" role="status">
+                  {t("common.refresh")}
+                </span>
+              </>
+            )}
+          </div>
         )}
 
         {total > 0 && (

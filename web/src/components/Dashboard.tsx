@@ -88,7 +88,9 @@ export function Dashboard() {
   });
 
   const { refetch, isPending, isFetching } = query;
-  const loading = isPending || isFetching;
+  // 作者：long。后台刷新必须保留已有结果，只有首次没有数据时才显示骨架屏，避免列表闪空。
+  const loading = isPending && !query.data;
+  const refreshing = isFetching && Boolean(query.data);
 
   useEffect(() => {
     const seconds = Number(autoRefresh);
@@ -212,9 +214,9 @@ export function Dashboard() {
               size="sm"
               className="gap-1.5"
               onClick={() => void refetch()}
-              disabled={!key || loading}
+              disabled={!key || isFetching}
             >
-              <RefreshCw className={cn(loading && "animate-spin")} />
+              <RefreshCw className={cn(isFetching && "animate-spin")} />
               {t("common.refresh")}
             </Button>
 
@@ -269,6 +271,7 @@ export function Dashboard() {
           <RecordsTab
             data={records}
             loading={loading}
+            refreshing={refreshing}
             options={options}
             filters={filters}
             onFiltersChange={(next) => {
