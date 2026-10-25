@@ -13,10 +13,11 @@ import (
 	_ "modernc.org/sqlite"
 
 	"cpa-usage-stats/internal/model"
+	"cpa-usage-stats/internal/timezone"
 )
 
 const (
-	timeLayout = "2006-01-02 15:04:05.000"
+	timeLayout = timezone.TimeLayout
 	// schemaVersion is the table layout this build writes. Adding a column or
 	// an index does NOT require a bump: ensureSchema applies those additively on
 	// every open. Bump it only for a change ALTER TABLE cannot express (column
@@ -123,9 +124,9 @@ type Storage struct {
 
 // New creates and initializes a SQLite storage instance.
 func New(dbPath string) (*Storage, error) {
-	// WAL + NORMAL sync for write throughput. _timezone=Local makes the driver
-	// parse the zone-less DATETIME text back as server-local time (default is UTC).
-	dsn := fmt.Sprintf("%s?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=synchronous(NORMAL)&_timezone=Local", dbPath)
+	// WAL + NORMAL sync for write throughput. SQLite rows are legacy UTC wall
+	// text; parsing them as UTC keeps results independent of the server locale.
+	dsn := fmt.Sprintf("%s?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=synchronous(NORMAL)&_timezone=UTC", dbPath)
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite db: %w", err)
@@ -358,9 +359,9 @@ func (s *Storage) InsertBatch(records []model.UsageRecord) error {
 			r.ResponseServiceTier,
 			r.Stream,
 			r.Generate,
-			// Stored as server-local wall time so day/hour buckets match the
-			// time ranges computed in handler.
-			reqAt.Local().Format(timeLayout),
+			// Keep the zone-less legacy representation in UTC wall time. Query
+			// boundaries are converted from the Beijing calendar before binding.
+			timezone.FormatStorage(reqAt),
 			r.Latency.Milliseconds(),
 			r.TTFT.Milliseconds(),
 			r.Failed,
@@ -390,11 +391,11 @@ func buildWhere(filter model.UsageFilter) (string, []interface{}) {
 
 	if filter.StartTime != nil {
 		clauses = append(clauses, "requested_at >= ?")
-		args = append(args, filter.StartTime.Format(timeLayout))
+		args = append(args, timezone.FormatStorage(*filter.StartTime))
 	}
 	if filter.EndTime != nil {
 		clauses = append(clauses, "requested_at < ?")
-		args = append(args, filter.EndTime.Format(timeLayout))
+		args = append(args, timezone.FormatStorage(*filter.EndTime))
 	}
 	if filter.Model != "" {
 		clauses = append(clauses, "model = ?")
@@ -924,7 +925,7 @@ func (s *Storage) CleanRetention(retentionDays int) (int64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	cutoff := time.Now().AddDate(0, 0, -retentionDays).Format(timeLayout)
+	cutoff := timezone.FormatStorage(time.Now().In(timezone.BusinessLocation).AddDate(0, 0, -retentionDays))
 	res, err := s.db.Exec("DELETE FROM usage_records WHERE requested_at < ?", cutoff)
 	if err != nil {
 		return 0, fmt.Errorf("clean retention: %w", err)
@@ -932,7 +933,7 @@ func (s *Storage) CleanRetention(retentionDays int) (int64, error) {
 	return res.RowsAffected()
 }
 
-// DeleteRange deletes records in the half-open local-time interval [start,end).
+// DeleteRange deletes records in the half-open Beijing-calendar interval [start,end).
 // Nil boundaries mean unbounded, which is used by the explicit "all" cleanup.
 // The caller performs VACUUM separately so the deleted count can be reported
 // before the database is compacted. 作者：long
@@ -944,14 +945,14 @@ func (s *Storage) DeleteRange(start, end *time.Time) (int64, error) {
 	args := []any{}
 	if start != nil {
 		where = "requested_at >= ?"
-		args = append(args, start.Local().Format(timeLayout))
+		args = append(args, timezone.FormatStorage(*start))
 	}
 	if end != nil {
 		if where != "" {
 			where += " AND "
 		}
 		where += "requested_at < ?"
-		args = append(args, end.Local().Format(timeLayout))
+		args = append(args, timezone.FormatStorage(*end))
 	}
 	query := "DELETE FROM usage_records"
 	if where != "" {

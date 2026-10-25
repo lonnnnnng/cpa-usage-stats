@@ -262,7 +262,7 @@ function DetailRow({ record, cost }: { record: StoredRecord; cost: RecordCost | 
 
   return (
     <TableRow className="bg-muted/30 hover:bg-muted/30">
-      <TableCell colSpan={6} className="whitespace-normal px-4 py-3">
+      <TableCell colSpan={12} className="whitespace-normal px-4 py-3">
         <div className="space-y-3">
           {/* 词元与费用放在最上方，保持一行，便于快速扫读 */}
           <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1.5">
@@ -533,9 +533,17 @@ export function RecordsTab({
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-44 pl-4">{t("records.th.time")}</TableHead>
-                  <TableHead className="w-[24%]">{t("records.th.model")}</TableHead>
-                  <TableHead className="w-[16%]">{t("records.th.provider")}</TableHead>
+                  <TableHead className="w-[18%]">{t("records.th.model")}</TableHead>
+                  <TableHead className="w-[12%]">{t("records.th.provider")}</TableHead>
+                  <TableHead className="w-20">{t("records.th.status")}</TableHead>
+                  <TableHead className="w-36">{t("records.th.protocol")}</TableHead>
+                  <TableHead className="w-[18%]">{t("records.th.base_url")}</TableHead>
+                  <TableHead className="w-[15%]">{t("records.th.source")}</TableHead>
+                  <TableHead className="w-36">
+                    {t("records.th.reasoning_effort")} / {t("records.th.mode")}
+                  </TableHead>
                   <TableHead className="w-56 text-right">{t("records.th.tokens")}</TableHead>
+                  <TableHead className="w-28 text-right">{t("records.th.cache_rate")}</TableHead>
                   <TableHead className="w-32 text-right">{t("records.th.cost")}</TableHead>
                   <TableHead className="w-40 pr-4 text-right">{t("records.th.latency")}</TableHead>
                 </TableRow>
@@ -544,7 +552,7 @@ export function RecordsTab({
                 {loading
                   ? ROW_SKELETON_KEYS.map((rowKey) => (
                       <TableRow key={rowKey}>
-                        <TableCell colSpan={6} className="px-4">
+                        <TableCell colSpan={12} className="px-4">
                           <Skeleton className="h-5 w-full" />
                         </TableCell>
                       </TableRow>
@@ -695,6 +703,16 @@ function RecordRows({
 }) {
   const { t } = useI18n();
   const { formatNumber } = useFormat();
+  const protocol = classifyRequestProtocol(record.provider, record.executor_type, record.source);
+  const protocolLabel = t(`records.row.protocol_${protocol}`);
+  const cacheRate = cacheHitRatePercent(
+    record.input_tokens,
+    record.cache_read_tokens,
+    record.cache_creation_tokens,
+    record.provider,
+    record.executor_type,
+    record.source,
+  );
   const aliasNote =
     (record.alias && record.alias !== record.model) || (record.response_model && record.response_model !== record.model)
       ? [
@@ -744,6 +762,43 @@ function RecordRows({
             {record.provider || "-"}
           </span>
         </TableCell>
+        <TableCell className="py-3">
+          <Badge
+            variant={record.failed ? "destructive" : "secondary"}
+            title={String(record.status_code || (record.failed ? 500 : 200))}
+          >
+            {record.failed ? t("records.row.status_failed") : t("records.row.status_success")}
+          </Badge>
+        </TableCell>
+        <TableCell className="max-w-40 py-3">
+          <Badge variant="outline" className="max-w-40 truncate" title={protocolLabel}>
+            {protocolLabel}
+          </Badge>
+        </TableCell>
+        <TableCell className="max-w-72 py-3 font-mono text-xs">
+          <span className="block truncate" title={record.base_url || undefined}>
+            {record.base_url || "-"}
+          </span>
+        </TableCell>
+        <TableCell className="max-w-56 py-3 font-mono text-xs">
+          <span className="block truncate" title={record.source || undefined}>
+            {record.source || "-"}
+          </span>
+        </TableCell>
+        <TableCell className="max-w-36 py-3 text-xs">
+          <div className="space-y-1">
+            <span className="block truncate" title={record.reasoning_effort || undefined}>
+              {record.reasoning_effort || "-"}
+            </span>
+            <span
+              className="block truncate text-muted-foreground"
+              title={record.stream ? t("records.detail.stream") : t("records.detail.non_stream")}
+            >
+              {record.stream ? t("records.detail.stream") : t("records.detail.non_stream")} ·{" "}
+              {record.generate ? t("records.detail.generate") : t("records.detail.not_generate")}
+            </span>
+          </div>
+        </TableCell>
         <TableCell className="w-56 py-2 text-right font-mono tabular-nums">
           <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
             <TokenMetric
@@ -775,6 +830,9 @@ function RecordRows({
               formatNumber={formatNumber}
             />
           </div>
+        </TableCell>
+        <TableCell className="w-28 py-3 text-right font-mono text-xs tabular-nums">
+          {cacheRate === null ? "-" : `${cacheRate.toFixed(1)}%`}
         </TableCell>
         <TableCell className="w-32 py-3 whitespace-nowrap text-right font-mono tabular-nums">
           <CostCell cost={cost} />
@@ -824,8 +882,8 @@ function TokenMetric({
   return (
     <span className={cn("inline-flex min-w-0 items-center justify-end gap-1", className)} title={label}>
       <Icon className="size-3 shrink-0" aria-hidden="true" />
-      <span className="truncate text-[10px] font-sans text-muted-foreground">{label}</span>
       <span>{formatNumber(value)}</span>
+      <span className="sr-only">{label}</span>
     </span>
   );
 }

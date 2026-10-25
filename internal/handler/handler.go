@@ -10,6 +10,7 @@ import (
 
 	"cpa-usage-stats/internal/model"
 	"cpa-usage-stats/internal/storage"
+	"cpa-usage-stats/internal/timezone"
 )
 
 // APIBasePath is where the host mounts this plugin's authenticated routes.
@@ -92,17 +93,19 @@ func Handle(store *storage.Storage, html []byte, req model.ManagementRequest, re
 	}
 }
 
-// parseCleanupRange uses the server's local calendar so "today" matches the
-// timestamps shown by the dashboard. An omitted range is rejected to avoid an
-// accidental full-database delete from a malformed management request. 作者：long
+// parseCleanupRange uses the dashboard's Beijing calendar. An omitted range is
+// rejected to avoid an accidental full-database delete from a malformed
+// management request. 作者：long
 func parseCleanupRange(q map[string][]string) (*time.Time, *time.Time, error) {
+	return parseCleanupRangeAt(q, time.Now())
+}
+
+func parseCleanupRangeAt(q map[string][]string, now time.Time) (*time.Time, *time.Time, error) {
 	rangeValue := ""
 	if values := q["range"]; len(values) > 0 {
 		rangeValue = strings.TrimSpace(values[0])
 	}
-	now := time.Now()
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	tomorrow := today.AddDate(0, 0, 1)
+	today, tomorrow := timezone.DayBounds(now)
 	switch rangeValue {
 	case "today":
 		return &today, &tomorrow, nil
@@ -129,6 +132,10 @@ func htmlResponse(body []byte) model.ManagementResponse {
 // parseFilter maps query params to a filter. range is one of today,
 // yesterday, 7d, 30d or all (default); today/yesterday get hourly trends.
 func parseFilter(q map[string][]string) (model.UsageFilter, bool) {
+	return parseFilterAt(q, time.Now())
+}
+
+func parseFilterAt(q map[string][]string, now time.Time) (model.UsageFilter, bool) {
 	get := func(key string) string {
 		if v := q[key]; len(v) > 0 {
 			return strings.TrimSpace(v[0])
@@ -151,8 +158,7 @@ func parseFilter(q map[string][]string) (model.UsageFilter, bool) {
 		filter.Failed = &f
 	}
 
-	now := time.Now()
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	today, _ := timezone.DayBounds(now)
 	daysBack := func(n int) *time.Time {
 		t := today.AddDate(0, 0, -n)
 		return &t

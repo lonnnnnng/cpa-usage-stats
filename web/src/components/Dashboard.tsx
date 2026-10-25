@@ -64,7 +64,8 @@ export function Dashboard() {
   const [filters, setFilters] = useState<RecordsFilters>(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
-  const [autoRefresh, setAutoRefresh] = useState("0");
+  // 默认每 10 秒保留一次最新快照，用户仍可切换为关闭或其它频率。
+  const [autoRefresh, setAutoRefresh] = useState("10");
   const [keyDialogOpen, setKeyDialogOpen] = useState(false);
   // 输入密钥后先保持弹窗，等这一轮请求成功再自动关闭，失败则原地显示错误
   const [savingKey, setSavingKey] = useState(false);
