@@ -536,7 +536,7 @@ export function RecordsTab({
                   <TableHead className="w-52">{t("records.th.model")}</TableHead>
                   <TableHead className="w-72">{t("records.th.source")}</TableHead>
                   <TableHead className="w-48">{t("records.th.tokens")}</TableHead>
-                  <TableHead className="w-28 text-right">{t("records.th.cache_rate")}</TableHead>
+                  <TableHead className="w-32 text-right">{t("records.th.cache_rate")}</TableHead>
                   <TableHead className="w-32 text-right">{t("records.th.cost")}</TableHead>
                   <TableHead className="w-40 pr-4 text-right">{t("records.th.latency")}</TableHead>
                 </TableRow>
@@ -772,16 +772,9 @@ function RecordRows({
         </TableCell>
         <TableCell className="w-72 py-3 font-mono text-xs text-muted-foreground">
           <div className="min-w-0 space-y-0.5">
-            <CopyableLine
-              parts={[
-                { text: record.provider || "-", copyValue: record.provider },
-                ...(record.source ? [{ text: ` · ${record.source}`, copyValue: record.source }] : []),
-              ]}
-            />
+            <CopyableLine parts={[{ text: record.provider || "-", copyValue: record.provider }]} />
             <CopyableLine parts={[{ text: record.base_url || "-", copyValue: record.base_url }]} />
-            <span className="block truncate" title={protocolLabel}>
-              {protocolLabel}
-            </span>
+            <CopyableLine parts={[{ text: record.source || "-", copyValue: record.source }]} />
           </div>
         </TableCell>
         <TableCell className="w-48 py-2 font-mono tabular-nums">
@@ -816,8 +809,13 @@ function RecordRows({
             />
           </div>
         </TableCell>
-        <TableCell className="w-28 py-3 text-right font-mono text-xs tabular-nums">
-          {cacheRate === null ? "-" : `${cacheRate.toFixed(1)}%`}
+        <TableCell className="w-32 py-3 text-right font-mono text-xs tabular-nums">
+          <div className="space-y-1">
+            <div>{cacheRate === null ? "-" : `${cacheRate.toFixed(1)}%`}</div>
+            <Badge variant="outline" className="max-w-full truncate text-[10px] font-normal" title={protocolLabel}>
+              {protocolLabel}
+            </Badge>
+          </div>
         </TableCell>
         <TableCell className="w-32 py-3 whitespace-nowrap text-right font-mono tabular-nums">
           <CostCell cost={cost} />
