@@ -204,7 +204,7 @@
       "provider": "Provider",
       "protocol": "Protocol",
       "base_url": "Outbound Base URL",
-      "source": "Source SK",
+      "source": "Origin",
       "reasoning_effort": "Reasoning",
       "mode": "Mode & flags",
       "cache_rate": "Cache hit rate",

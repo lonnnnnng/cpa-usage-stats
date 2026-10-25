@@ -10,7 +10,7 @@ import {
   Search,
   Sigma,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { type MouseEvent, useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -262,7 +262,7 @@ function DetailRow({ record, cost }: { record: StoredRecord; cost: RecordCost | 
 
   return (
     <TableRow className="bg-muted/30 hover:bg-muted/30">
-      <TableCell colSpan={12} className="whitespace-normal px-4 py-3">
+      <TableCell colSpan={7} className="whitespace-normal px-4 py-3">
         <div className="space-y-3">
           {/* 词元与费用放在最上方，保持一行，便于快速扫读 */}
           <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1.5">
@@ -529,20 +529,13 @@ export function RecordsTab({
           </Empty>
         ) : (
           <div className="relative" aria-busy={refreshing}>
-            <Table>
+            <Table className="min-w-[1120px] table-fixed">
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-44 pl-4">{t("records.th.time")}</TableHead>
-                  <TableHead className="w-[18%]">{t("records.th.model")}</TableHead>
-                  <TableHead className="w-[12%]">{t("records.th.provider")}</TableHead>
-                  <TableHead className="w-20">{t("records.th.status")}</TableHead>
-                  <TableHead className="w-36">{t("records.th.protocol")}</TableHead>
-                  <TableHead className="w-[18%]">{t("records.th.base_url")}</TableHead>
-                  <TableHead className="w-[15%]">{t("records.th.source")}</TableHead>
-                  <TableHead className="w-36">
-                    {t("records.th.reasoning_effort")} / {t("records.th.mode")}
-                  </TableHead>
-                  <TableHead className="w-56 text-right">{t("records.th.tokens")}</TableHead>
+                  <TableHead className="w-52">{t("records.th.model")}</TableHead>
+                  <TableHead className="w-72">{t("records.th.source")}</TableHead>
+                  <TableHead className="w-48">{t("records.th.tokens")}</TableHead>
                   <TableHead className="w-28 text-right">{t("records.th.cache_rate")}</TableHead>
                   <TableHead className="w-32 text-right">{t("records.th.cost")}</TableHead>
                   <TableHead className="w-40 pr-4 text-right">{t("records.th.latency")}</TableHead>
@@ -552,7 +545,7 @@ export function RecordsTab({
                 {loading
                   ? ROW_SKELETON_KEYS.map((rowKey) => (
                       <TableRow key={rowKey}>
-                        <TableCell colSpan={12} className="px-4">
+                        <TableCell colSpan={7} className="px-4">
                           <Skeleton className="h-5 w-full" />
                         </TableCell>
                       </TableRow>
@@ -724,6 +717,10 @@ function RecordRows({
           .filter(Boolean)
           .join(" · ")
       : "";
+  const modeLabel = [
+    record.stream ? t("records.detail.stream") : t("records.detail.non_stream"),
+    record.generate ? t("records.detail.generate") : t("records.detail.not_generate"),
+  ].join(" · ");
 
   return (
     <>
@@ -742,65 +739,53 @@ function RecordRows({
           "aria-expanded:bg-muted/40",
         )}
       >
-        <TableCell className="w-44 whitespace-nowrap py-3 pl-4 font-mono text-xs text-muted-foreground">
-          {formatDateTimeFull(record.requested_at)}
+        <TableCell className="w-44 py-3 pl-4 font-mono text-xs text-muted-foreground">
+          <div className="space-y-1">
+            <div className="truncate whitespace-nowrap" title={formatDateTimeFull(record.requested_at)}>
+              {formatDateTimeFull(record.requested_at)}
+            </div>
+            <Badge
+              variant={record.failed ? "destructive" : "secondary"}
+              className={cn(
+                "w-fit max-w-full truncate border text-[11px] font-normal",
+                !record.failed && "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+              )}
+              title={String(record.status_code || (record.failed ? 500 : 200))}
+            >
+              {record.failed ? t("records.row.status_failed") : t("records.row.status_success")}
+            </Badge>
+          </div>
         </TableCell>
-        <TableCell className="py-3 font-medium">
-          <div className="flex max-w-112 flex-col">
-            <span className="truncate" title={record.model}>
+        <TableCell className="w-52 py-3 font-medium">
+          <div className="min-w-0 space-y-0.5 text-xs">
+            <span className="block truncate text-sm" title={record.model}>
               {record.model}
             </span>
-            {aliasNote && (
-              <span className="truncate text-xs text-muted-foreground" title={aliasNote}>
-                {aliasNote}
-              </span>
-            )}
-          </div>
-        </TableCell>
-        <TableCell className="max-w-64 py-3 text-muted-foreground">
-          <span className="block truncate" title={record.provider || undefined}>
-            {record.provider || "-"}
-          </span>
-        </TableCell>
-        <TableCell className="py-3">
-          <Badge
-            variant={record.failed ? "destructive" : "secondary"}
-            title={String(record.status_code || (record.failed ? 500 : 200))}
-          >
-            {record.failed ? t("records.row.status_failed") : t("records.row.status_success")}
-          </Badge>
-        </TableCell>
-        <TableCell className="max-w-40 py-3">
-          <Badge variant="outline" className="max-w-40 truncate" title={protocolLabel}>
-            {protocolLabel}
-          </Badge>
-        </TableCell>
-        <TableCell className="max-w-72 py-3 font-mono text-xs">
-          <span className="block truncate" title={record.base_url || undefined}>
-            {record.base_url || "-"}
-          </span>
-        </TableCell>
-        <TableCell className="max-w-56 py-3 font-mono text-xs">
-          <span className="block truncate" title={record.source || undefined}>
-            {record.source || "-"}
-          </span>
-        </TableCell>
-        <TableCell className="max-w-36 py-3 text-xs">
-          <div className="space-y-1">
-            <span className="block truncate" title={record.reasoning_effort || undefined}>
+            <span className="block truncate text-muted-foreground" title={record.reasoning_effort || undefined}>
               {record.reasoning_effort || "-"}
             </span>
-            <span
-              className="block truncate text-muted-foreground"
-              title={record.stream ? t("records.detail.stream") : t("records.detail.non_stream")}
-            >
-              {record.stream ? t("records.detail.stream") : t("records.detail.non_stream")} ·{" "}
-              {record.generate ? t("records.detail.generate") : t("records.detail.not_generate")}
+            <span className="block truncate text-muted-foreground" title={modeLabel}>
+              {modeLabel}
+            </span>
+            {aliasNote && <span className="sr-only">{aliasNote}</span>}
+          </div>
+        </TableCell>
+        <TableCell className="w-72 py-3 font-mono text-xs text-muted-foreground">
+          <div className="min-w-0 space-y-0.5">
+            <CopyableLine
+              parts={[
+                { text: record.provider || "-", copyValue: record.provider },
+                ...(record.source ? [{ text: ` · ${record.source}`, copyValue: record.source }] : []),
+              ]}
+            />
+            <CopyableLine parts={[{ text: record.base_url || "-", copyValue: record.base_url }]} />
+            <span className="block truncate" title={protocolLabel}>
+              {protocolLabel}
             </span>
           </div>
         </TableCell>
-        <TableCell className="w-56 py-2 text-right font-mono tabular-nums">
-          <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+        <TableCell className="w-48 py-2 font-mono tabular-nums">
+          <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
             <TokenMetric
               icon={ArrowDownToLine}
               label={t("records.row.token_input")}
@@ -880,10 +865,56 @@ function TokenMetric({
   formatNumber: (value: number) => string;
 }) {
   return (
-    <span className={cn("inline-flex min-w-0 items-center justify-end gap-1", className)} title={label}>
+    <span
+      className={cn("inline-flex min-w-0 items-center justify-start gap-1 overflow-hidden", className)}
+      title={label}
+    >
       <Icon className="size-3 shrink-0" aria-hidden="true" />
-      <span>{formatNumber(value)}</span>
+      <span className="min-w-0 truncate">{formatNumber(value)}</span>
       <span className="sr-only">{label}</span>
+    </span>
+  );
+}
+
+function CopyableLine({ parts }: { parts: { text: string; copyValue?: string }[] }) {
+  const { t } = useI18n();
+
+  return (
+    <div className="group flex min-w-0 items-center gap-1">
+      {parts.map((part) => (
+        <CopyablePart key={`${part.copyValue ?? "text"}:${part.text}`} part={part} copyLabel={t("common.copy")} />
+      ))}
+    </div>
+  );
+}
+
+function CopyablePart({ part, copyLabel }: { part: { text: string; copyValue?: string }; copyLabel: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async (event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    if (!part.copyValue || !(await copyToClipboard(part.copyValue))) return;
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  };
+
+  return (
+    <span className="group/part inline-flex min-w-0 items-center gap-0.5">
+      <span className="min-w-0 truncate" title={part.text}>
+        {part.text}
+      </span>
+      {part.copyValue && (
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="size-5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/part:opacity-100 focus:opacity-100"
+          title={copyLabel}
+          aria-label={copyLabel}
+          onClick={handleCopy}
+        >
+          {copied ? <Check className="size-3 text-primary" /> : <Copy className="size-3" />}
+        </Button>
+      )}
     </span>
   );
 }

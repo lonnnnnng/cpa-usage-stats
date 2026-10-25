@@ -204,7 +204,7 @@
       "provider": "Provider",
       "protocol": "协议类型",
       "base_url": "出站 Base URL",
-      "source": "来源 SK",
+      "source": "站源",
       "reasoning_effort": "推理等级",
       "mode": "模式与标记",
       "cache_rate": "缓存命中率",
