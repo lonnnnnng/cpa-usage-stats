@@ -13,12 +13,14 @@ import (
 
 // Worker handles asynchronous usage record processing and batch insertion.
 type Worker struct {
-	cfg     config.Config
-	store   *storage.Storage
-	queue   chan model.UsageRecord
-	done    chan struct{}
-	wg      sync.WaitGroup
-	dropped atomic.Int64
+	cfg         config.Config
+	store       *storage.Storage
+	queue       chan model.UsageRecord
+	done        chan struct{}
+	wg          sync.WaitGroup
+	stopOnce    sync.Once
+	dropped     atomic.Int64
+	writeErrors atomic.Int64
 }
 
 // New creates and starts a new Worker.
@@ -75,6 +77,7 @@ func (w *Worker) Stats() model.RuntimeStats {
 		DroppedRecords: w.dropped.Load(),
 		QueueDepth:     len(w.queue),
 		QueueCapacity:  cap(w.queue),
+		WriteErrors:    w.writeErrors.Load(),
 	}
 }
 
@@ -95,8 +98,16 @@ func (w *Worker) run() {
 		if len(batch) == 0 {
 			return
 		}
-		if err := w.store.InsertBatch(batch); err != nil {
-			log.Printf("[cpa-usage-stats] batch insert error: %v (count: %d)", err, len(batch))
+		for attempt := 1; attempt <= 3; attempt++ {
+			if err := w.store.InsertBatch(batch); err == nil {
+				batch = make([]model.UsageRecord, 0, w.cfg.BatchSize)
+				return
+			} else if attempt == 3 {
+				w.writeErrors.Add(int64(len(batch)))
+				log.Printf("[cpa-usage-stats] batch insert failed after retries: %v (count: %d)", err, len(batch))
+			} else {
+				time.Sleep(time.Duration(attempt) * 50 * time.Millisecond)
+			}
 		}
 		batch = make([]model.UsageRecord, 0, w.cfg.BatchSize)
 	}
@@ -154,6 +165,6 @@ func (w *Worker) retentionLoop() {
 
 // Stop gracefully flushes remaining queue records and shuts down worker.
 func (w *Worker) Stop() {
-	close(w.done)
+	w.stopOnce.Do(func() { close(w.done) })
 	w.wg.Wait()
 }

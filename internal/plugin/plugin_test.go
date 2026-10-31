@@ -217,7 +217,9 @@ func TestPluginLifecycle(t *testing.T) {
 		}
 	}
 
-	call(t, "usage.handle", model.UsageRecord{RequestID: "req-1", Model: "gpt-5", SessionID: "sess-1", ResponseModel: "gpt-5.2", RequestedAt: time.Now(), Detail: model.UsageDetail{TotalTokens: 100, CacheReadTokens: 30}})
+	completedAt := time.Now()
+	call(t, "request.complete", model.RequestCompletion{RequestID: "req-1", TraceID: "trace-1", Model: "gpt-5", RequestedModel: "gpt-5", Outcome: "succeeded", StatusCode: 200, StartedAt: completedAt.Add(-time.Second), CompletedAt: completedAt})
+	call(t, "usage.handle", model.UsageRecord{RequestID: "req-1", TraceID: "trace-1", SelectionID: "selection-1", Model: "gpt-5", SessionID: "sess-1", ResponseModel: "gpt-5.2", RequestedAt: completedAt, Detail: model.UsageDetail{TotalTokens: 100, CacheReadTokens: 30}})
 	time.Sleep(200 * time.Millisecond)
 
 	resp := manage(t, handler.APIBasePath+"/summary", map[string][]string{"range": {"today"}})
@@ -234,14 +236,23 @@ func TestPluginLifecycle(t *testing.T) {
 	if len(summary.Models) != 1 || summary.Models[0].Secondary != "" {
 		t.Errorf("model stats = %+v", summary.Models)
 	}
+	if summary.UniqueTraces != 1 || summary.UniqueSessions != 1 || summary.Lifecycle.Succeeded != 1 || len(summary.Selections) != 1 || summary.Selections[0].Name != "selection-1" {
+		t.Errorf("correlation summary = %+v", summary)
+	}
 
 	resp = manage(t, handler.APIBasePath+"/records", nil)
 	var records model.RecordListResponse
 	if err := json.Unmarshal(resp.Body, &records); err != nil || resp.StatusCode != 200 {
 		t.Fatalf("records: status %d body %s", resp.StatusCode, resp.Body)
 	}
-	if records.Total != 1 || records.Items[0].SessionID != "sess-1" || records.Items[0].ResponseModel != "gpt-5.2" {
+	if records.Total != 1 || records.Items[0].SessionID != "sess-1" || records.Items[0].SelectionID != "selection-1" || records.Items[0].ResponseModel != "gpt-5.2" {
 		t.Errorf("records = %+v", records)
+	}
+
+	resp = manage(t, handler.APIBasePath+"/lifecycle", nil)
+	var lifecycle model.LifecycleListResponse
+	if err := json.Unmarshal(resp.Body, &lifecycle); err != nil || resp.StatusCode != 200 || lifecycle.Total != 1 || lifecycle.Items[0].Outcome != "succeeded" {
+		t.Errorf("lifecycle = status %d body %s decoded %+v", resp.StatusCode, resp.Body, lifecycle)
 	}
 
 	resp = manage(t, handler.APIBasePath+"/options", nil)

@@ -62,15 +62,29 @@ export interface SummaryData {
   api_key_stats: GroupStat[];
   auth_stats: GroupStat[];
   session_stats: GroupStat[];
+  trace_stats: GroupStat[];
+  selection_stats: GroupStat[];
+  unique_traces: number;
+  unique_sessions: number;
+  lifecycle: LifecycleSummary;
   failure_stats: FailureStat[];
   bucket: "hour" | "day";
   trend: TrendPoint[];
+}
+
+export interface LifecycleSummary {
+  total: number;
+  succeeded: number;
+  failed: number;
+  rejected: number;
+  canceled: number;
 }
 
 export interface StoredRecord {
   id: number;
   request_id: string;
   trace_id: string;
+  selection_id: string;
   session_id: string;
   parent_session_id: string;
   provider: string;
@@ -149,6 +163,7 @@ export interface RuntimeStats {
   dropped_records: number;
   queue_depth: number;
   queue_capacity: number;
+  write_errors: number;
 }
 
 export type TimeRange = "today" | "yesterday" | "7d" | "30d" | "all";
@@ -159,6 +174,8 @@ export interface RecordsFilters {
   apiKey: string;
   authId: string;
   sessionId: string;
+  traceId: string;
+  selectionId: string;
   status: "all" | "success" | "failed";
   keyword: string;
 }

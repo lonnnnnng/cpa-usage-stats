@@ -65,6 +65,8 @@ func (p *Instance) HandleCall(method string, payload []byte) ([]byte, error) {
 		return okEnvelope(struct{}{})
 	case "usage.handle":
 		return p.handleUsage(payload)
+	case "request.complete":
+		return p.handleRequestComplete(payload)
 	case "management.register":
 		return p.handleManagementRegister()
 	case "management.handle":
@@ -144,8 +146,9 @@ func (p *Instance) handleRegister(payload []byte) ([]byte, error) {
 			ConfigFields:     configFields,
 		},
 		Capabilities: map[string]bool{
-			"usage_plugin":   true,
-			"management_api": true,
+			"usage_plugin":             true,
+			"management_api":           true,
+			"request_lifecycle_plugin": true,
 		},
 	})
 }
@@ -211,6 +214,7 @@ func (p *Instance) handleManagementRegister() ([]byte, error) {
 		Routes: []model.ManagementRoute{
 			{Method: http.MethodGet, Path: handler.APIBasePath + "/summary", Description: "用量聚合统计"},
 			{Method: http.MethodGet, Path: handler.APIBasePath + "/records", Description: "调用明细分页"},
+			{Method: http.MethodGet, Path: handler.APIBasePath + "/lifecycle", Description: "请求终态事件分页"},
 			{Method: http.MethodGet, Path: handler.APIBasePath + "/options", Description: "筛选下拉选项"},
 			{Method: http.MethodGet, Path: handler.APIBasePath + "/stats", Description: "运行时计数（丢弃记录、队列压力）"},
 			{Method: http.MethodGet, Path: handler.APIBasePath + "/storage", Description: "数据库空间占用"},
@@ -218,6 +222,31 @@ func (p *Instance) handleManagementRegister() ([]byte, error) {
 			{Method: http.MethodPost, Path: handler.APIBasePath + "/storage/clear", Description: "按时间范围清理用量数据"},
 		},
 	})
+}
+
+func (p *Instance) handleRequestComplete(payload []byte) ([]byte, error) {
+	var event model.RequestCompletion
+	if err := json.Unmarshal(payload, &event); err != nil {
+		return errorEnvelope("invalid_request_completion", err.Error()), nil
+	}
+	if event.RequestID == "" {
+		return errorEnvelope("invalid_request_completion", "RequestID is required"), nil
+	}
+	switch event.Outcome {
+	case "succeeded", "failed", "rejected", "canceled":
+	default:
+		return errorEnvelope("invalid_request_completion", "Outcome must be succeeded, failed, rejected, or canceled"), nil
+	}
+	p.mu.RLock()
+	store := p.store
+	p.mu.RUnlock()
+	if store == nil {
+		return errorEnvelope("storage_unavailable", "usage storage is not initialized"), nil
+	}
+	if err := store.StoreLifecycle(event); err != nil {
+		return errorEnvelope("store_request_completion_failed", err.Error()), nil
+	}
+	return okEnvelope(struct{}{})
 }
 
 // handleQuiesce drains buffered records into storage before a hot reload

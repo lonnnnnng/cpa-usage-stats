@@ -26,6 +26,8 @@ interface ApiFilters {
   apiKey: string;
   authId: string;
   sessionId: string;
+  traceId?: string;
+  selectionId?: string;
   failed?: string;
   keyword?: string;
 }
@@ -67,6 +69,8 @@ function filterParams(filters: ApiFilters): Record<string, string> {
     api_key: filters.apiKey,
     auth_id: filters.authId,
     session_id: filters.sessionId,
+    trace_id: filters.traceId ?? "",
+    selection_id: filters.selectionId ?? "",
     failed: filters.failed ?? "",
     keyword: filters.keyword?.trim() ?? "",
   };

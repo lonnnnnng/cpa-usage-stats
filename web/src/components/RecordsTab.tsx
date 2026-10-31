@@ -58,6 +58,8 @@ const EMPTY_FILTERS: RecordsFilters = {
   apiKey: "",
   authId: "",
   sessionId: "",
+  traceId: "",
+  selectionId: "",
   status: "all",
   keyword: "",
 };
@@ -167,6 +169,7 @@ function DetailRow({ record, cost }: { record: StoredRecord; cost: RecordCost | 
   const metaItems: { label: string; value: string; badge?: boolean }[] = [
     { label: t("records.detail.request_id"), value: record.request_id },
     { label: t("records.detail.trace_id"), value: record.trace_id },
+    { label: "Selection ID", value: record.selection_id },
     { label: t("records.detail.session_id"), value: record.session_id },
     ...(record.parent_session_id
       ? [{ label: t("records.detail.parent_session"), value: record.parent_session_id }]
@@ -377,6 +380,8 @@ export function RecordsTab({
   // 关键字与会话 ID 本地保留并防抖，避免每敲一个字就发一次查询
   const [keyword, setKeyword] = useState(filters.keyword);
   const [sessionId, setSessionId] = useState(filters.sessionId);
+  const [traceId, setTraceId] = useState(filters.traceId);
+  const [selectionId, setSelectionId] = useState(filters.selectionId);
 
   const [jumpPage, setJumpPage] = useState(String(page));
 
@@ -406,6 +411,18 @@ export function RecordsTab({
     return () => clearTimeout(timer);
   }, [sessionId, filters, onFiltersChange]);
 
+  useEffect(() => {
+    if (traceId === filters.traceId) return;
+    const timer = setTimeout(() => onFiltersChange({ ...filters, traceId: traceId.trim() }), 300);
+    return () => clearTimeout(timer);
+  }, [traceId, filters, onFiltersChange]);
+
+  useEffect(() => {
+    if (selectionId === filters.selectionId) return;
+    const timer = setTimeout(() => onFiltersChange({ ...filters, selectionId: selectionId.trim() }), 300);
+    return () => clearTimeout(timer);
+  }, [selectionId, filters, onFiltersChange]);
+
   const setFilter = (patch: Partial<RecordsFilters>) => {
     onFiltersChange({ ...filters, ...patch });
     onPageChange(1);
@@ -414,6 +431,8 @@ export function RecordsTab({
   const resetFilters = () => {
     setKeyword("");
     setSessionId("");
+    setTraceId("");
+    setSelectionId("");
     onFiltersChange(EMPTY_FILTERS);
     onPageChange(1);
   };
@@ -424,6 +443,8 @@ export function RecordsTab({
   const hasActiveFilters =
     Boolean(keyword.trim()) ||
     Boolean(sessionId.trim()) ||
+    Boolean(traceId.trim()) ||
+    Boolean(selectionId.trim()) ||
     Boolean(filters.model) ||
     Boolean(filters.provider) ||
     Boolean(filters.apiKey) ||
@@ -460,6 +481,22 @@ export function RecordsTab({
               className="pl-8"
             />
           </div>
+
+          <Input
+            value={traceId}
+            onChange={(event) => setTraceId(event.target.value)}
+            placeholder="Trace ID"
+            aria-label="Trace ID"
+            className="font-mono text-xs"
+          />
+
+          <Input
+            value={selectionId}
+            onChange={(event) => setSelectionId(event.target.value)}
+            placeholder="Selection ID"
+            aria-label="Selection ID"
+            className="font-mono text-xs"
+          />
 
           <FilterSelect
             value={filters.model}

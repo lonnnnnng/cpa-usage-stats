@@ -18,6 +18,14 @@ CLIProxyAPI（CPA 8.0+）用量统计插件：通过 usage 插件接口采集请
 - 内置看板：用量总览（走势、维度分布、Token 构成、活动热力图）、调用明细和空间占用。
 - 支持数据保留天数、模型排除、批量写入参数等配置。
 
+## 增强能力
+
+当前实现兼容 CPA v8 的 `UsageRecord.SelectionID` 和 `request.complete` 回调：
+
+- 调用明细保存调度选择 ID，并支持 Trace/Selection/Session 筛选与聚合；
+- `/v0/management/plugins/cpa-usage-stats/lifecycle` 提供请求终态分页，区分 `succeeded`、`failed`、`rejected`、`canceled`；
+- 旧 SQLite 数据库采用追加式迁移；Worker 停止幂等，批量写入失败会有限重试并报告 `write_errors`。
+
 ## 开发环境配置
 
 前置要求：

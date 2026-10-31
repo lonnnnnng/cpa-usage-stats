@@ -24,6 +24,7 @@ type EnvelopeError struct {
 type UsageRecord struct {
 	RequestID            string        `json:"RequestID,omitempty"`
 	TraceID              string        `json:"TraceID,omitempty"`
+	SelectionID          string        `json:"SelectionID,omitempty"`
 	Provider             string        `json:"Provider,omitempty"`
 	BaseURL              string        `json:"BaseURL,omitempty"`
 	ExecutorType         string        `json:"ExecutorType,omitempty"`
@@ -77,6 +78,7 @@ type StoredRecord struct {
 	ID                   int64               `json:"id"`
 	RequestID            string              `json:"request_id"`
 	TraceID              string              `json:"trace_id"`
+	SelectionID          string              `json:"selection_id"`
 	SessionID            string              `json:"session_id"`
 	ParentSessionID      string              `json:"parent_session_id"`
 	Provider             string              `json:"provider"`
@@ -160,6 +162,8 @@ type UsageFilter struct {
 	APIKey    string
 	AuthID    string
 	Session   string
+	Trace     string
+	Selection string
 	Failed    *bool
 	Keyword   string
 	Page      int
@@ -172,8 +176,9 @@ type RuntimeStats struct {
 	// queue was full. Non-zero means the dashboard is under-reporting.
 	DroppedRecords int64 `json:"dropped_records"`
 	// QueueDepth and QueueCapacity expose current buffer pressure.
-	QueueDepth    int `json:"queue_depth"`
-	QueueCapacity int `json:"queue_capacity"`
+	QueueDepth    int   `json:"queue_depth"`
+	QueueCapacity int   `json:"queue_capacity"`
+	WriteErrors   int64 `json:"write_errors"`
 }
 
 // SummaryResponse represents aggregated statistics for a time range.
@@ -203,15 +208,60 @@ type SummaryResponse struct {
 	StreamRequests int64   `json:"stream_requests"`
 	// DroppedRecords counts usage records discarded because the in-memory
 	// queue was full; it makes silent data loss visible on the dashboard.
-	DroppedRecords int64         `json:"dropped_records"`
-	Models         []GroupStat   `json:"model_stats"`
-	Providers      []GroupStat   `json:"provider_stats"`
-	APIKeys        []GroupStat   `json:"api_key_stats"`
-	Auths          []GroupStat   `json:"auth_stats"`
-	Sessions       []GroupStat   `json:"session_stats"`
-	Failures       []FailureStat `json:"failure_stats"`
-	Bucket         string        `json:"bucket"`
-	Trend          []TrendPoint  `json:"trend"`
+	DroppedRecords int64            `json:"dropped_records"`
+	Models         []GroupStat      `json:"model_stats"`
+	Providers      []GroupStat      `json:"provider_stats"`
+	APIKeys        []GroupStat      `json:"api_key_stats"`
+	Auths          []GroupStat      `json:"auth_stats"`
+	Sessions       []GroupStat      `json:"session_stats"`
+	Traces         []GroupStat      `json:"trace_stats"`
+	Selections     []GroupStat      `json:"selection_stats"`
+	UniqueTraces   int64            `json:"unique_traces"`
+	UniqueSessions int64            `json:"unique_sessions"`
+	Lifecycle      LifecycleSummary `json:"lifecycle"`
+	Failures       []FailureStat    `json:"failure_stats"`
+	Bucket         string           `json:"bucket"`
+	Trend          []TrendPoint     `json:"trend"`
+}
+
+// LifecycleSummary counts terminal request events independently from usage
+// records, so rejected/canceled requests remain visible even without tokens.
+type LifecycleSummary struct {
+	Total     int64 `json:"total"`
+	Succeeded int64 `json:"succeeded"`
+	Failed    int64 `json:"failed"`
+	Rejected  int64 `json:"rejected"`
+	Canceled  int64 `json:"canceled"`
+}
+
+// RequestCompletion mirrors the host request.complete callback.
+type RequestCompletion struct {
+	RequestID      string         `json:"RequestID"`
+	TraceID        string         `json:"TraceID"`
+	SourceFormat   string         `json:"SourceFormat"`
+	Model          string         `json:"Model"`
+	RequestedModel string         `json:"RequestedModel"`
+	Stream         bool           `json:"Stream"`
+	Outcome        string         `json:"Outcome"`
+	StatusCode     int            `json:"StatusCode"`
+	Error          string         `json:"Error"`
+	StartedAt      time.Time      `json:"StartedAt"`
+	CompletedAt    time.Time      `json:"CompletedAt"`
+	Metadata       map[string]any `json:"Metadata,omitempty"`
+}
+
+// LifecycleEvent is the persisted terminal request event exposed by the
+// lifecycle management endpoint.
+type LifecycleEvent struct {
+	RequestCompletion
+	ReceivedAt time.Time `json:"received_at"`
+}
+
+type LifecycleListResponse struct {
+	Total    int64            `json:"total"`
+	Page     int              `json:"page"`
+	PageSize int              `json:"page_size"`
+	Items    []LifecycleEvent `json:"items"`
 }
 
 // FailureStat aggregates failed requests by upstream status and error type.

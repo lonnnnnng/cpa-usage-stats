@@ -41,6 +41,12 @@ func Handle(store *storage.Storage, html []byte, req model.ManagementRequest, re
 			return jsonError(http.StatusInternalServerError, "query_records_failed", err.Error())
 		}
 		return jsonOK(records)
+	case "/lifecycle":
+		lifecycle, err := store.GetLifecycle(filter)
+		if err != nil {
+			return jsonError(http.StatusInternalServerError, "query_lifecycle_failed", err.Error())
+		}
+		return jsonOK(lifecycle)
 	case "/options":
 		options, err := store.GetOptions()
 		if err != nil {
@@ -144,12 +150,14 @@ func parseFilterAt(q map[string][]string, now time.Time) (model.UsageFilter, boo
 	}
 
 	filter := model.UsageFilter{
-		Model:    get("model"),
-		Provider: get("provider"),
-		APIKey:   get("api_key"),
-		AuthID:   get("auth_id"),
-		Session:  get("session_id"),
-		Keyword:  get("keyword"),
+		Model:     get("model"),
+		Provider:  get("provider"),
+		APIKey:    get("api_key"),
+		AuthID:    get("auth_id"),
+		Session:   get("session_id"),
+		Trace:     get("trace_id"),
+		Selection: get("selection_id"),
+		Keyword:   get("keyword"),
 	}
 	filter.Page, _ = strconv.Atoi(get("page"))
 	filter.PageSize, _ = strconv.Atoi(get("page_size"))

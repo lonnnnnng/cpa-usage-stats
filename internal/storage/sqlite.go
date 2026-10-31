@@ -29,6 +29,9 @@ const (
 	maxFailureBody = 4 << 10
 	// Response headers for failed requests; filtered and capped to avoid database bloat.
 	maxFailureHeaders = 2 << 10
+	// Lifecycle metadata is an extension bag supplied by the host; cap it so a
+	// malformed callback cannot grow the database without bound.
+	maxLifecycleMetadata = 8 << 10
 	// Extracted error type strings are short identifiers (rate_limit_error).
 	maxErrorType = 64
 )
@@ -165,6 +168,7 @@ var tableColumns = []struct{ name, ddl string }{
 	{"id", "INTEGER PRIMARY KEY AUTOINCREMENT"},
 	{"request_id", "TEXT NOT NULL"},
 	{"trace_id", "TEXT"},
+	{"selection_id", "TEXT"},
 	{"session_id", "TEXT"},
 	{"parent_session_id", "TEXT"},
 	{"provider", "TEXT"},
@@ -212,6 +216,8 @@ var tableIndexes = []string{
 	`CREATE INDEX IF NOT EXISTS idx_usage_provider ON usage_records(provider, requested_at)`,
 	`CREATE INDEX IF NOT EXISTS idx_usage_api_key ON usage_records(api_key, requested_at)`,
 	`CREATE INDEX IF NOT EXISTS idx_usage_session ON usage_records(session_id)`,
+	`CREATE INDEX IF NOT EXISTS idx_usage_trace ON usage_records(trace_id, requested_at)`,
+	`CREATE INDEX IF NOT EXISTS idx_usage_selection ON usage_records(selection_id, requested_at)`,
 	`CREATE INDEX IF NOT EXISTS idx_usage_auth ON usage_records(auth_id, auth_index)`,
 	`CREATE INDEX IF NOT EXISTS idx_usage_failed ON usage_records(failed, status_code) WHERE failed = 1`,
 }
@@ -255,6 +261,26 @@ func (s *Storage) ensureSchema() error {
 		if _, err := s.db.Exec(idx); err != nil {
 			return fmt.Errorf("create index: %w", err)
 		}
+	}
+	if _, err := s.db.Exec(`CREATE TABLE IF NOT EXISTS request_lifecycle (
+		request_id TEXT PRIMARY KEY,
+		trace_id TEXT,
+		source_format TEXT,
+		model TEXT,
+		requested_model TEXT,
+		stream INTEGER NOT NULL DEFAULT 0,
+		outcome TEXT NOT NULL,
+		status_code INTEGER NOT NULL DEFAULT 0,
+		error TEXT,
+		started_at DATETIME,
+		completed_at DATETIME,
+		metadata TEXT,
+		received_at DATETIME NOT NULL
+	)`); err != nil {
+		return fmt.Errorf("create lifecycle table: %w", err)
+	}
+	if _, err := s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_lifecycle_trace ON request_lifecycle(trace_id, completed_at)`); err != nil {
+		return fmt.Errorf("create lifecycle trace index: %w", err)
 	}
 
 	if version != schemaVersion {
@@ -304,7 +330,7 @@ func (s *Storage) InsertBatch(records []model.UsageRecord) error {
 
 	stmt, err := tx.Prepare(`
 		INSERT INTO usage_records (
-			request_id, trace_id, session_id, parent_session_id, provider, base_url,
+			request_id, trace_id, selection_id, session_id, parent_session_id, provider, base_url,
 			executor_type, model, response_model, alias, api_key, is_native_key, access_provider,
 			auth_id, auth_index, auth_type, source,
 			reasoning_effort, service_tier, effective_service_tier, response_service_tier,
@@ -312,7 +338,7 @@ func (s *Storage) InsertBatch(records []model.UsageRecord) error {
 			failed, status_code, error_type, failure_body, response_headers,
 			input_tokens, output_tokens, reasoning_tokens,
 			cached_tokens, cache_read_tokens, cache_creation_tokens, total_tokens
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`)
 	if err != nil {
 		return fmt.Errorf("prepare insert: %w", err)
@@ -338,6 +364,7 @@ func (s *Storage) InsertBatch(records []model.UsageRecord) error {
 		_, err := stmt.Exec(
 			r.RequestID,
 			r.TraceID,
+			r.SelectionID,
 			r.SessionID,
 			r.ParentSessionID,
 			r.Provider,
@@ -385,6 +412,142 @@ func (s *Storage) InsertBatch(records []model.UsageRecord) error {
 	return tx.Commit()
 }
 
+// StoreLifecycle persists the terminal state separately from usage rows. A
+// lifecycle event may arrive before usage.handle, so keeping it in its own
+// table avoids manufacturing a zero-token usage record or losing the event.
+func (s *Storage) StoreLifecycle(event model.RequestCompletion) error {
+	if strings.TrimSpace(event.RequestID) == "" {
+		return fmt.Errorf("request lifecycle event has no request_id")
+	}
+	metadata := ""
+	if len(event.Metadata) > 0 {
+		b, err := json.Marshal(event.Metadata)
+		if err != nil {
+			return fmt.Errorf("marshal lifecycle metadata: %w", err)
+		}
+		if len(b) <= maxLifecycleMetadata {
+			metadata = string(b)
+		}
+	}
+	startedAt, completedAt := "", ""
+	if !event.StartedAt.IsZero() {
+		startedAt = timezone.FormatStorage(event.StartedAt)
+	}
+	if !event.CompletedAt.IsZero() {
+		completedAt = timezone.FormatStorage(event.CompletedAt)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec(`INSERT INTO request_lifecycle
+		(request_id, trace_id, source_format, model, requested_model, stream, outcome,
+		 status_code, error, started_at, completed_at, metadata, received_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(request_id) DO UPDATE SET
+		 trace_id=excluded.trace_id, source_format=excluded.source_format,
+		 model=excluded.model, requested_model=excluded.requested_model,
+		 stream=excluded.stream, outcome=excluded.outcome,
+		 status_code=excluded.status_code, error=excluded.error,
+		 started_at=excluded.started_at, completed_at=excluded.completed_at,
+		 metadata=excluded.metadata, received_at=excluded.received_at`,
+		event.RequestID, event.TraceID, event.SourceFormat, event.Model,
+		event.RequestedModel, event.Stream, event.Outcome, event.StatusCode,
+		event.Error, startedAt, completedAt, metadata, timezone.FormatStorage(time.Now()))
+	return err
+}
+
+func lifecycleWhere(filter model.UsageFilter) (string, []interface{}) {
+	var clauses []string
+	var args []interface{}
+	if filter.StartTime != nil {
+		clauses = append(clauses, "completed_at >= ?")
+		args = append(args, timezone.FormatStorage(*filter.StartTime))
+	}
+	if filter.EndTime != nil {
+		clauses = append(clauses, "completed_at < ?")
+		args = append(args, timezone.FormatStorage(*filter.EndTime))
+	}
+	if filter.Trace != "" {
+		clauses = append(clauses, "trace_id = ?")
+		args = append(args, filter.Trace)
+	}
+	where := ""
+	if len(clauses) > 0 {
+		where = "WHERE " + strings.Join(clauses, " AND ")
+	}
+	return where, args
+}
+
+func (s *Storage) GetLifecycleSummaryLocked(filter model.UsageFilter) (model.LifecycleSummary, error) {
+	where, args := lifecycleWhere(filter)
+	var summary model.LifecycleSummary
+	var succeeded, failed, rejected, canceled int64
+	err := s.db.QueryRow(`SELECT COUNT(*),
+		COALESCE(SUM(outcome = 'succeeded'), 0),
+		COALESCE(SUM(outcome = 'failed'), 0),
+		COALESCE(SUM(outcome = 'rejected'), 0),
+		COALESCE(SUM(outcome = 'canceled'), 0)
+		FROM request_lifecycle `+where, args...).Scan(&summary.Total, &succeeded, &failed, &rejected, &canceled)
+	if err != nil {
+		return summary, fmt.Errorf("query lifecycle summary: %w", err)
+	}
+	summary.Succeeded, summary.Failed, summary.Rejected, summary.Canceled = succeeded, failed, rejected, canceled
+	return summary, nil
+}
+
+// GetLifecycle returns terminal events for management clients.
+func (s *Storage) GetLifecycle(filter model.UsageFilter) (*model.LifecycleListResponse, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	where, args := lifecycleWhere(filter)
+	var total int64
+	if err := s.db.QueryRow("SELECT COUNT(*) FROM request_lifecycle "+where, args...).Scan(&total); err != nil {
+		return nil, fmt.Errorf("count lifecycle events: %w", err)
+	}
+	page, pageSize := max(filter.Page, 1), filter.PageSize
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+	pageSize = min(pageSize, 100)
+	rows, err := s.db.Query(`SELECT request_id, COALESCE(trace_id, ''), COALESCE(source_format, ''),
+		COALESCE(model, ''), COALESCE(requested_model, ''), stream, outcome, status_code,
+		COALESCE(error, ''), COALESCE(started_at, ''), COALESCE(completed_at, ''),
+		COALESCE(metadata, ''), received_at FROM request_lifecycle `+where+
+		` ORDER BY received_at DESC LIMIT ? OFFSET ?`, append(args, pageSize, (page-1)*pageSize)...)
+	if err != nil {
+		return nil, fmt.Errorf("query lifecycle events: %w", err)
+	}
+	defer rows.Close()
+	items := make([]model.LifecycleEvent, 0, pageSize)
+	for rows.Next() {
+		var e model.LifecycleEvent
+		var started, completed, received, metadata string
+		if err := rows.Scan(&e.RequestID, &e.TraceID, &e.SourceFormat, &e.Model,
+			&e.RequestedModel, &e.Stream, &e.Outcome, &e.StatusCode, &e.Error,
+			&started, &completed, &metadata, &received); err != nil {
+			return nil, err
+		}
+		e.StartedAt = parseStorageTime(started)
+		e.CompletedAt = parseStorageTime(completed)
+		e.ReceivedAt = parseStorageTime(received)
+		if metadata != "" {
+			_ = json.Unmarshal([]byte(metadata), &e.Metadata)
+		}
+		items = append(items, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return &model.LifecycleListResponse{Total: total, Page: page, PageSize: pageSize, Items: items}, nil
+}
+
+func parseStorageTime(value string) time.Time {
+	if value == "" {
+		return time.Time{}
+	}
+	parsed, _ := time.Parse(timeLayout, value)
+	return parsed
+}
+
 func buildWhere(filter model.UsageFilter) (string, []interface{}) {
 	var clauses []string
 	var args []interface{}
@@ -417,6 +580,14 @@ func buildWhere(filter model.UsageFilter) (string, []interface{}) {
 		clauses = append(clauses, "session_id = ?")
 		args = append(args, filter.Session)
 	}
+	if filter.Trace != "" {
+		clauses = append(clauses, "trace_id = ?")
+		args = append(args, filter.Trace)
+	}
+	if filter.Selection != "" {
+		clauses = append(clauses, "selection_id = ?")
+		args = append(args, filter.Selection)
+	}
 	if filter.Failed != nil {
 		if *filter.Failed {
 			clauses = append(clauses, "failed = 1")
@@ -426,8 +597,8 @@ func buildWhere(filter model.UsageFilter) (string, []interface{}) {
 	}
 	if filter.Keyword != "" {
 		kw := "%" + filter.Keyword + "%"
-		clauses = append(clauses, "(request_id LIKE ? OR trace_id LIKE ? OR session_id LIKE ? OR model LIKE ? OR alias LIKE ? OR api_key LIKE ? OR failure_body LIKE ?)")
-		args = append(args, kw, kw, kw, kw, kw, kw, kw)
+		clauses = append(clauses, "(request_id LIKE ? OR trace_id LIKE ? OR selection_id LIKE ? OR session_id LIKE ? OR model LIKE ? OR alias LIKE ? OR api_key LIKE ? OR failure_body LIKE ?)")
+		args = append(args, kw, kw, kw, kw, kw, kw, kw, kw)
 	}
 
 	where := ""
@@ -519,10 +690,18 @@ func (s *Storage) GetSummary(filter model.UsageFilter, hourly bool) (*model.Summ
 		{"api_key", "", &resp.APIKeys},
 		{"auth_id, auth_index, auth_type", "auth", &resp.Auths},
 		{"session_id", "", &resp.Sessions},
+		{"trace_id", "", &resp.Traces},
+		{"selection_id", "", &resp.Selections},
 	}
 	for _, group := range groups {
 		stats, err := s.groupStats(group.groupBy, group.secondary, where, args)
 		if err != nil {
+			return nil, err
+		}
+		if err := s.db.QueryRow(fmt.Sprintf("SELECT COUNT(DISTINCT NULLIF(trace_id, '')), COUNT(DISTINCT NULLIF(session_id, '')) FROM usage_records %s", where), args...).Scan(&resp.UniqueTraces, &resp.UniqueSessions); err != nil {
+			return nil, fmt.Errorf("query correlation counts: %w", err)
+		}
+		if resp.Lifecycle, err = s.GetLifecycleSummaryLocked(filter); err != nil {
 			return nil, err
 		}
 		*group.target = stats
@@ -722,7 +901,7 @@ func (s *Storage) GetRecords(filter model.UsageFilter) (*model.RecordListRespons
 
 	rows, err := s.db.Query(fmt.Sprintf(`
 		SELECT
-			id, request_id, COALESCE(trace_id, ''), COALESCE(session_id, ''), COALESCE(parent_session_id, ''),
+			id, request_id, COALESCE(trace_id, ''), COALESCE(selection_id, ''), COALESCE(session_id, ''), COALESCE(parent_session_id, ''),
 			COALESCE(provider, ''), COALESCE(base_url, ''), COALESCE(executor_type, ''),
 			COALESCE(model, ''), COALESCE(response_model, ''), COALESCE(alias, ''), COALESCE(api_key, ''),
 			COALESCE(is_native_key, 0), COALESCE(access_provider, ''),
@@ -750,6 +929,7 @@ func (s *Storage) GetRecords(filter model.UsageFilter) (*model.RecordListRespons
 			&r.ID,
 			&r.RequestID,
 			&r.TraceID,
+			&r.SelectionID,
 			&r.SessionID,
 			&r.ParentSessionID,
 			&r.Provider,

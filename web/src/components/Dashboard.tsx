@@ -43,6 +43,8 @@ const EMPTY_FILTERS: RecordsFilters = {
   apiKey: "",
   authId: "",
   sessionId: "",
+  traceId: "",
+  selectionId: "",
   status: "all",
   keyword: "",
 };
