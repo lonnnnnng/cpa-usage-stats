@@ -63,7 +63,7 @@ plugins:
 
 ### Manual install
 
-Download the archive for your platform from [this fork's Releases](https://github.com/lonnnnnng/cpa-usage-stats/releases), verify it against `checksums.txt`, and place `cpa-usage-stats.so` (Linux), `.dylib` (macOS) or `.dll` (Windows) into CPA's `plugins` directory. For Docker, place the shared library in the mounted plugin directory. Manual installation does not establish store provenance; prefer the store source above if you want to update through the store later.
+The Release workflow only builds Linux ARM64 packages. Download `cpa-usage-stats_<version>_linux_arm64.zip` from [this fork's Releases](https://github.com/lonnnnnng/cpa-usage-stats/releases), verify it against `checksums.txt`, and place `cpa-usage-stats.so` into CPA's `plugins` directory. For Docker, place the shared library in the mounted plugin directory. Manual installation does not establish store provenance; prefer the store source above if you want to update through the store later.
 
 ```bash
 mkdir -p /path/to/cliproxyapi/plugins

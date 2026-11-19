@@ -44,31 +44,8 @@ jobs:
 
   build-binary:
     needs: build-frontend
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            goos: linux
-            goarch: amd64
-            ext: so
-          - os: ubuntu-24.04-arm
-            goos: linux
-            goarch: arm64
-            ext: so
-          - os: macos-latest
-            goos: darwin
-            goarch: arm64
-            ext: dylib
-          - os: macos-latest
-            goos: darwin
-            goarch: amd64
-            ext: dylib
-          - os: windows-latest
-            goos: windows
-            goarch: amd64
-            ext: dll
-    runs-on: ${{ matrix.os }}
+    # 作者：long。安装目标只有 Linux ARM64，直接在同架构 Runner 构建，避免其他平台占用发布队列。
+    runs-on: ubuntu-24.04-arm
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -89,19 +66,15 @@ jobs:
         shell: bash
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          LIB_NAME="cpa-usage-stats.${{ matrix.ext }}"
-          ZIP_NAME="cpa-usage-stats_${VERSION}_${{ matrix.goos }}_${{ matrix.goarch }}.zip"
+          LIB_NAME="cpa-usage-stats.so"
+          ZIP_NAME="cpa-usage-stats_${VERSION}_linux_arm64.zip"
           mkdir -p dist
 
-          export GOOS="${{ matrix.goos }}"
-          export GOARCH="${{ matrix.goarch }}"
+          export GOOS="linux"
+          export GOARCH="arm64"
           export CGO_ENABLED=1
 
-          if [ "${{ matrix.goos }}" = "darwin" ] && [ "${{ matrix.goarch }}" = "amd64" ]; then
-            export CC="clang -target x86_64-apple-macos10.13"
-          fi
-
-          echo "==> Building CGO shared library: ${LIB_NAME} for ${{ matrix.goos }}/${{ matrix.goarch }}..."
+          echo "==> Building CGO shared library: ${LIB_NAME} for linux/arm64..."
           go build -buildmode=c-shared -ldflags="-s -w -X cpa-usage-stats/internal/plugin.Version=${VERSION}" -o "${LIB_NAME}" .
           rm -f "cpa-usage-stats.h"
 
@@ -112,7 +85,7 @@ jobs:
       - name: Upload platform zip
         uses: actions/upload-artifact@v7
         with:
-          name: release-${{ matrix.goos }}-${{ matrix.goarch }}
+          name: release-linux-arm64
           path: dist/*
           retention-days: 1
 
@@ -123,26 +96,24 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Download all release artifacts
+      - name: Download Linux ARM64 release artifact
         uses: actions/download-artifact@v8
         with:
-          path: all-artifacts
+          name: release-linux-arm64
+          path: release-assets
 
       - name: Prepare Release Assets
         run: |
-          mkdir -p release-assets
-          # Find all zip files and copy
-          find all-artifacts -name "*.zip" -exec cp {} release-assets/ \;
-
-          # Consolidate checksums.txt
-          cat all-artifacts/**/checksum.line > release-assets/checksums.txt
-          echo "==> Generated consolidated checksums.txt:"
-          cat release-assets/checksums.txt
+          # 作者：long。只接收 ARM64 构建产物，并在上传前核验摘要，防止其他工件混入 Release。
+          test -f "release-assets/cpa-usage-stats_${GITHUB_REF_NAME#v}_linux_arm64.zip"
+          mv release-assets/checksum.line release-assets/checksums.txt
+          cd release-assets
+          sha256sum -c checksums.txt
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           files: |
-            release-assets/*.zip
+            release-assets/*_linux_arm64.zip
             release-assets/checksums.txt
           generate_release_notes: true

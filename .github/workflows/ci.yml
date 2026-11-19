@@ -21,7 +21,8 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # 作者：long。测试和动态库构建检查与唯一发布目标一致，直接验证 Linux ARM64 的原生行为。
+    runs-on: ubuntu-24.04-arm
     steps:
       - name: Checkout
         uses: actions/checkout@v7

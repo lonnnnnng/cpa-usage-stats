@@ -71,7 +71,7 @@ plugins:
 
 ### 手动安装
 
-从 [本 fork 的 Releases](https://github.com/lonnnnnng/cpa-usage-stats/releases) 下载对应平台的压缩包，先按 `checksums.txt` 校验，再解压得到 `cpa-usage-stats.so`（Linux）/ `.dylib`（macOS）/ `.dll`（Windows），放入 CPA 的 `plugins` 目录。Docker 部署时，把动态库放进映射的插件目录。手动安装不建立商店来源记录；需要以后在商店更新时，优先使用上面的插件源安装。
+当前 Release 流水线仅构建 Linux ARM64 安装包。请从 [本 fork 的 Releases](https://github.com/lonnnnnng/cpa-usage-stats/releases) 下载 `cpa-usage-stats_<版本>_linux_arm64.zip`，先按 `checksums.txt` 校验，再解压得到 `cpa-usage-stats.so`，放入 CPA 的 `plugins` 目录。Docker 部署时，把动态库放进映射的插件目录。手动安装不建立商店来源记录；需要以后在商店更新时，优先使用上面的插件源安装。
 
 ```bash
 mkdir -p /path/to/cliproxyapi/plugins
