@@ -54,7 +54,8 @@
     "tabs": {
       "overview": "用量总览",
       "records": "调用明细",
-      "storage": "空间占用"
+      "storage": "空间占用",
+      "lifecycle": "请求终态"
     },
     "load_failed": "数据加载失败：{{message}}",
     "empty": {
@@ -189,11 +190,11 @@
     "empty": "无匹配记录",
     "filter": {
       "model_all": "全部模型",
-      "provider_all": "全部 Provider",
-      "key_all": "全部 Key",
-      "status_all": "全部状态",
-      "status_success": "仅成功（2xx）",
-      "status_failed": "仅失败（4xx/5xx）",
+      "provider_all": "全部提供商",
+      "key_all": "全部客户端 Key",
+      "status_all": "全部执行结果",
+      "status_success": "执行成功",
+      "status_failed": "执行失败",
       "auth_all": "全部凭据",
       "session_placeholder": "会话 ID"
     },
@@ -296,7 +297,10 @@
       "jump": "跳至",
       "page_unit": "页",
       "page_size": "每页条数"
-    }
+    },
+    "advanced_filters": "高级筛选",
+    "exact_filter_hint": "Trace、会话、Selection ID 均为精确匹配；Selection ID 只在调度器上报时存在。",
+    "filter_scope": "筛选仅影响调用明细。关键词按原文包含匹配，可查模型、Key、请求/追踪/会话 ID 或失败正文。"
   },
   "storage": {
     "title": "空间占用",
@@ -313,7 +317,7 @@
     "oldest": "最早记录",
     "newest": "最新记录",
     "reclaimable": "可回收空间",
-    "retention_hint": "过期记录由后台每 12 小时清理一次，保留天数通过插件配置 retention_days 调整。",
+    "retention_hint": "用量与请求终态均按保留天数自动清理，后台每12小时执行；终态缺少完成时间时按接收时间计算。",
     "reclaimable_hint": "SQLite 删除记录后不会立即缩小文件；回收会对数据库执行 VACUUM 并截断 WAL。",
     "reclaim": "回收空间",
     "reclaim_title": "回收数据库空间？",
@@ -325,15 +329,16 @@
     "load_failed": "空间信息加载失败：{{message}}",
     "clear_data": "清理数据",
     "clearing": "清理中...",
-    "clear_title": "清理用量数据？",
-    "clear_desc": "删除选定时间范围内的调用明细，删除后无法恢复；数据库会自动压缩。请确认清理范围。",
+    "clear_title": "清理用量与终态数据？",
+    "clear_desc": "删除选定时间范围内的调用明细与请求终态事件，删除后无法恢复；数据库会自动压缩。终态按完成时间筛选，缺失时按接收时间。",
     "clear_today": "今天",
     "clear_7d": "近 7 天",
     "clear_30d": "近 30 天",
     "clear_all": "全部数据",
     "clear_confirm": "确认清理",
-    "cleared": "已清理 {{count}} 条记录",
-    "clear_failed": "清理失败：{{message}}"
+    "cleared": "已清理 {{count}} 条用量记录、{{lifecycle}} 条终态事件",
+    "clear_failed": "清理失败：{{message}}",
+    "lifecycle_records": "终态记录 {{count}} 条"
   },
   "auth": {
     "title": "需要管理密钥",
@@ -368,5 +373,30 @@
     "less": "少",
     "more": "多",
     "empty": "当前范围内没有可用的活动数据"
+  },
+  "lifecycle": {
+    "title": "请求终态事件",
+    "description": "展示 CPA 已上报的成功、失败、拒绝与取消事件，包含没有 Token 用量的请求。事件可能延迟到达，未收到事件不代表请求仍在执行。终态 ID 与调用明细的执行 ID 不同。",
+    "request_id": "终态 Request ID",
+    "model_filter": "模型（精确匹配）",
+    "model": "模型 / 协议",
+    "requested": "请求模型",
+    "outcome": "终态",
+    "all": "全部终态",
+    "succeeded": "成功",
+    "failed": "失败",
+    "rejected": "已拒绝",
+    "canceled": "已取消",
+    "reset": "重置",
+    "completed": "完成时间",
+    "received": "接收时间",
+    "started": "开始时间",
+    "duration": "执行耗时",
+    "details": "查看详情",
+    "received_fallback": "按接收时间",
+    "no_status": "未提供 HTTP 状态",
+    "empty": "当前范围内没有匹配的终态事件",
+    "count": "共 {{count}} 条终态事件",
+    "not_loaded": "终态数据尚未加载，请连接或刷新重试。"
   }
 }

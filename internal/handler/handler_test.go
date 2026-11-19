@@ -11,6 +11,35 @@ import (
 	"cpa-usage-stats/internal/timezone"
 )
 
+func TestLifecycleViewValidationAndClearCounts(t *testing.T) {
+	s, err := storage.New(filepath.Join(t.TempDir(), "usage.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.StoreLifecycle(model.RequestCompletion{RequestID: "life", Outcome: "rejected", CompletedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	req := model.ManagementRequest{Method: "GET", Path: APIBasePath + "/lifecycle", Query: map[string][]string{"view": {"events"}, "outcome": {"invalid"}}}
+	if response := Handle(s, nil, req, 90, model.RuntimeStats{}); response.StatusCode != 400 {
+		t.Fatal("invalid outcome accepted")
+	}
+	req.Query = map[string][]string{"range": {"all"}, "view": {"events"}, "request_id": {"life"}}
+	response := Handle(s, nil, req, 90, model.RuntimeStats{})
+	var list model.LifecycleViewResponse
+	if json.Unmarshal(response.Body, &list) != nil || list.Total != 1 || list.Items[0].Outcome != "rejected" {
+		t.Fatalf("view=%s", response.Body)
+	}
+	req.Method = "POST"
+	req.Path = APIBasePath + "/storage/clear"
+	req.Query = map[string][]string{"range": {"all"}}
+	response = Handle(s, nil, req, 90, model.RuntimeStats{})
+	var cleanup model.StorageCleanupResponse
+	if json.Unmarshal(response.Body, &cleanup) != nil || response.StatusCode != 200 || cleanup.DeletedRecords != 0 || cleanup.DeletedLifecycleRecords != 1 || cleanup.Stats.LifecycleRecordCount != 0 {
+		t.Fatalf("clear=%s", response.Body)
+	}
+}
+
 func TestOverviewProjectionPreservesFullSummary(t *testing.T) {
 	s, err := storage.New(filepath.Join(t.TempDir(), "usage.db"))
 	if err != nil {

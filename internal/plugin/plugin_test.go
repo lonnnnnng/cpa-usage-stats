@@ -264,10 +264,13 @@ func TestPluginLifecycle(t *testing.T) {
 		t.Errorf("options = %+v", options)
 	}
 
-	// Quiesce drains and stops the worker: later records are dropped, but the
-	// management API and storage stay alive until shutdown.
+	// 作者：long。暂停后明确拒收，宿主可重试；管理查询与已落盘数据仍可用。
 	call(t, "plugin.quiesce", nil)
-	call(t, "usage.handle", model.UsageRecord{RequestID: "req-2", Model: "gpt-5", RequestedAt: time.Now()})
+	raw, err := GetInstance().HandleCall("usage.handle", []byte(`{"RequestID":"req-2","Model":"gpt-5"}`))
+	var rejected model.Envelope
+	if err != nil || json.Unmarshal(raw, &rejected) != nil || rejected.OK || rejected.Error.Code != "usage_unavailable" {
+		t.Fatalf("quiesced usage must report rejection: %s %v", raw, err)
+	}
 	time.Sleep(120 * time.Millisecond)
 	resp = manage(t, handler.APIBasePath+"/records", nil)
 	if err := json.Unmarshal(resp.Body, &records); err != nil {

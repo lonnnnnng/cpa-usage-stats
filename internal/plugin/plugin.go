@@ -192,10 +192,14 @@ func (p *Instance) handleUsage(payload []byte) ([]byte, error) {
 	// Enqueue never blocks, so holding the read lock keeps records from
 	// landing in a worker that apply is stopping.
 	p.mu.RLock()
-	if p.worker != nil {
-		p.worker.Enqueue(record)
+	defer p.mu.RUnlock()
+	// 作者：long。拒收必须让宿主知道，外部投递方和重载重放才能重试；成功只表示已进入异步队列。
+	if p.worker == nil {
+		return errorEnvelope("usage_unavailable", "usage worker is not accepting records"), nil
 	}
-	p.mu.RUnlock()
+	if !p.worker.Enqueue(record) {
+		return errorEnvelope("usage_queue_full", "usage queue is full"), nil
+	}
 
 	return okEnvelope(struct{}{})
 }
@@ -238,8 +242,9 @@ func (p *Instance) handleRequestComplete(payload []byte) ([]byte, error) {
 		return errorEnvelope("invalid_request_completion", "Outcome must be succeeded, failed, rejected, or canceled"), nil
 	}
 	p.mu.RLock()
+	// 作者：long。终态落盘前保持实例读锁，重配置或关闭必须等待，避免写入已关闭的旧数据库。
+	defer p.mu.RUnlock()
 	store := p.store
-	p.mu.RUnlock()
 	if store == nil {
 		return errorEnvelope("storage_unavailable", "usage storage is not initialized"), nil
 	}

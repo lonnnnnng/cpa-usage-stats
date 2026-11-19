@@ -3,6 +3,7 @@ import { AlertTriangle, ChartColumn, KeyRound, RefreshCw } from "lucide-react";
 import { useCallback, useState } from "react";
 import { DisplaySettings } from "@/components/DisplaySettings";
 import { KeyDialog } from "@/components/KeyDialog";
+import { LifecycleTab } from "@/components/LifecycleTab";
 import { LanguageToggle } from "@/components/language-toggle";
 import { Logo } from "@/components/logo";
 import { OverviewSummary } from "@/components/OverviewTab";
@@ -19,13 +20,13 @@ import { useFormat } from "@/hooks/use-format";
 import { useManagementKey } from "@/hooks/use-management-key";
 import { usePricing } from "@/hooks/use-pricing";
 import { useI18n } from "@/i18n/context";
-import { UnauthorizedError } from "@/lib/api";
-import { usageQueryOptions } from "@/lib/usage-queries";
+import { keyFingerprint, UnauthorizedError } from "@/lib/api";
+import { lifecycleQueryOptions, usageQueryOptions } from "@/lib/usage-queries";
 import { cn } from "@/lib/utils";
-import type { RecordsFilters, TimeRange } from "@/types";
+import type { LifecycleFilters, RecordsFilters, TimeRange } from "@/types";
 
 /** 概览拆成多页签后的页签值；@/types 里的 TabKey 只有 overview/records 两态，已不适用 */
-type TabKey = "overview" | "records" | "storage";
+type TabKey = "overview" | "records" | "lifecycle" | "storage";
 
 const PAGE_SIZE_OPTIONS = [15, 30, 50, 100];
 
@@ -60,21 +61,46 @@ export function Dashboard() {
   const [range, setRange] = useState<TimeRange>("today");
   const [filters, setFilters] = useState<RecordsFilters>(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
+  const [lifecyclePage, setLifecyclePage] = useState(1);
+  const [lifecycleFilters, setLifecycleFilters] = useState<LifecycleFilters>({
+    requestId: "",
+    traceId: "",
+    model: "",
+    outcome: "",
+  });
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
   // 默认每 10 秒保留一次最新快照，用户仍可切换为关闭或其它频率。
   const [autoRefresh, setAutoRefresh] = useState("10");
   const [keyDialogOpen, setKeyDialogOpen] = useState(false);
   // 输入密钥后先保持弹窗，等这一轮请求成功再自动关闭，失败则原地显示错误
   const [savingKey, setSavingKey] = useState(false);
+  const [rejectedKey, setRejectedKey] = useState<string | null>(null);
+  const rejectCurrentKey = useCallback(() => setRejectedKey(keyFingerprint(key)), [key]);
 
   const queryClient = useQueryClient();
-  const definitions = usageQueryOptions(key, range, filters, page, pageSize);
+  const definitions = usageQueryOptions(key, range, filters, page, pageSize, rejectCurrentKey);
   // 作者：long。首次只发送认证探针；错误密钥不重试、不定时重探，防止触发宿主封禁。
-  const optionsQuery = useQuery({ ...definitions.options, enabled: Boolean(key) });
-  const authorized = optionsQuery.isSuccess && !optionsQuery.error;
+  const optionsQuery = useQuery({
+    ...definitions.options,
+    enabled: Boolean(key),
+    // 作者：long。持续查看明细时低频更新新增模型和凭据；认证失败后停止自动探测，避免宿主封禁。
+    refetchInterval: (query) =>
+      tab === "records" &&
+      query.state.data !== undefined &&
+      !(query.state.error instanceof UnauthorizedError) &&
+      rejectedKey !== keyFingerprint(key)
+        ? 60_000
+        : false,
+  });
+  // 作者：long。已通过认证的缓存遇到暂时网络错误仍可恢复，只有401或明确撤销才关闭业务查询。
+  const authorized =
+    optionsQuery.data !== undefined &&
+    !(optionsQuery.error instanceof UnauthorizedError) &&
+    rejectedKey !== keyFingerprint(key);
   const interval = Number(autoRefresh) > 0 ? Number(autoRefresh) * 1000 : false;
   const summaryQuery = useQuery({
-    ...definitions.summary,
+    // 作者：long。明细筛选只作用于明细，概览只有全局时间范围，避免出现不可见的隐藏筛选。
+    ...usageQueryOptions(key, range, EMPTY_FILTERS, 1, pageSize, rejectCurrentKey).summary,
     enabled: authorized && tab === "overview",
     refetchInterval: (query) => (query.state.error instanceof UnauthorizedError ? false : interval),
   });
@@ -83,9 +109,14 @@ export function Dashboard() {
     enabled: authorized && tab === "records",
     refetchInterval: (query) => (query.state.error instanceof UnauthorizedError ? false : interval),
   });
-  const activeQuery = tab === "records" ? recordsQuery : summaryQuery;
+  const lifecycleQuery = useQuery({
+    ...lifecycleQueryOptions(key, range, lifecycleFilters, lifecyclePage, rejectCurrentKey),
+    enabled: authorized && tab === "lifecycle",
+    refetchInterval: (query) => (query.state.error instanceof UnauthorizedError ? false : interval),
+  });
+  const activeQuery = tab === "records" ? recordsQuery : tab === "lifecycle" ? lifecycleQuery : summaryQuery;
   const error = optionsQuery.error ?? activeQuery.error;
-  const unauthorized = error instanceof UnauthorizedError;
+  const unauthorized = error instanceof UnauthorizedError || rejectedKey === keyFingerprint(key);
   const loading = Boolean(key) && !error && (optionsQuery.isPending || (summaryQuery.isPending && !summaryQuery.data));
   const recordsLoading =
     Boolean(key) && !error && (optionsQuery.isPending || (recordsQuery.isPending && !recordsQuery.data));
@@ -106,6 +137,13 @@ export function Dashboard() {
     // 作者：long。手动刷新先验密钥，定时刷新由 Query 复用在途请求，不取消重启慢查询。
     const verified = await optionsQuery.refetch({ cancelRefetch: false });
     if (verified.isSuccess) {
+      if (rejectedKey === keyFingerprint(key)) {
+        await queryClient.resetQueries({
+          queryKey: ["usage", keyFingerprint(key)],
+          predicate: (query) => query.queryKey[2] !== "options",
+        });
+        setRejectedKey(null);
+      }
       if (tab === "storage") {
         await queryClient.invalidateQueries({ queryKey: definitions.storageKey });
       } else {
@@ -122,6 +160,13 @@ export function Dashboard() {
       setKey(value);
       const definition = usageQueryOptions(value, range, filters, page, pageSize).options;
       await queryClient.fetchQuery({ ...definition, staleTime: 0 });
+      if (rejectedKey === keyFingerprint(value)) {
+        await queryClient.resetQueries({
+          queryKey: ["usage", keyFingerprint(value)],
+          predicate: (query) => query.queryKey[2] !== "options",
+        });
+        setRejectedKey(null);
+      }
       setKeyDialogOpen(false);
     } catch {
       // 错误保留在 options query，输入框继续显示，便于用户修正或重试。
@@ -184,6 +229,9 @@ export function Dashboard() {
             <TabsTrigger value="records" className="h-6.5">
               {t("dashboard.tabs.records")}
             </TabsTrigger>
+            <TabsTrigger value="lifecycle" className="h-6.5">
+              {t("dashboard.tabs.lifecycle")}
+            </TabsTrigger>
             <TabsTrigger value="storage" className="h-6.5">
               {t("dashboard.tabs.storage")}
             </TabsTrigger>
@@ -196,6 +244,7 @@ export function Dashboard() {
                 if (!value) return;
                 setRange(value as TimeRange);
                 setPage(1);
+                setLifecyclePage(1);
               }}
               className="shrink-0 gap-0"
             >
@@ -304,7 +353,23 @@ export function Dashboard() {
         </TabsContent>
 
         <TabsContent value="storage">
-          <StorageTab apiKey={key} authorized={authorized} />
+          <StorageTab apiKey={key} authorized={authorized} onUnauthorized={rejectCurrentKey} />
+        </TabsContent>
+        <TabsContent value="lifecycle">
+          <LifecycleTab
+            data={lifecycleQuery.data ?? null}
+            loading={
+              Boolean(key) && !error && (optionsQuery.isPending || (lifecycleQuery.isPending && !lifecycleQuery.data))
+            }
+            refreshing={lifecycleQuery.isFetching}
+            filters={lifecycleFilters}
+            onFiltersChange={(next) => {
+              setLifecycleFilters(next);
+              setLifecyclePage(1);
+            }}
+            page={lifecyclePage}
+            onPageChange={setLifecyclePage}
+          />
         </TabsContent>
       </Tabs>
 

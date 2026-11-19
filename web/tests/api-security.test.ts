@@ -4,6 +4,7 @@ import type { AddressInfo } from "node:net";
 import { afterEach, mock, test } from "node:test";
 import {
   clearStorage,
+  fetchLifecycle,
   fetchOptions,
   fetchOverview,
   fetchRecords,
@@ -21,6 +22,11 @@ const basePath = "/v0/management/plugins/cpa-usage-stats";
 const key = "synthetic-test-key-not-a-real-secret";
 const filters = { range: "all", model: "", provider: "", apiKey: "", authId: "", sessionId: "" };
 const endpoints = [
+  {
+    path: "/lifecycle",
+    method: "GET",
+    call: (value: string) => fetchLifecycle(value, "all", { requestId: "", traceId: "", model: "", outcome: "" }, 1),
+  },
   { path: "/summary", method: "GET", call: (value: string) => fetchOverview(value, filters) },
   { path: "/summary", method: "GET", call: (value: string) => fetchSummary(value, filters) },
   { path: "/records", method: "GET", call: (value: string) => fetchRecords(value, filters, 1, 20) },
@@ -30,6 +36,27 @@ const endpoints = [
   { path: "/storage/reclaim", method: "POST", call: reclaimStorage },
   { path: "/storage/clear", method: "POST", call: (value: string) => clearStorage(value, "all") },
 ];
+
+test("completion view sends only its own filters and forwards cancellation", async () => {
+  setBrowser();
+  const controller = new AbortController();
+  const fetchMock = mock.method(globalThis, "fetch", async () => Response.json({ items: [] }));
+  await fetchLifecycle(
+    key,
+    "7d",
+    { requestId: "life-1", traceId: "trace-1", model: "model-1", outcome: "canceled" },
+    2,
+    controller.signal,
+  );
+  const [input, init] = fetchMock.mock.calls[0].arguments;
+  const params = new URL(String(input)).searchParams;
+  assert.equal(params.get("view"), "events");
+  assert.equal(params.get("request_id"), "life-1");
+  assert.equal(params.get("outcome"), "canceled");
+  assert.equal(params.get("page"), "2");
+  assert.equal(params.has("failed"), false);
+  assert.equal(init?.signal, controller.signal);
+});
 
 test("overview selects compact projection and forwards cancellation", async () => {
   setBrowser();

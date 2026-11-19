@@ -184,6 +184,8 @@ type ResourceRoute struct {
 
 // UsageFilter represents query filter parameters.
 type UsageFilter struct {
+	RequestID string
+	Outcome   string
 	StartTime *time.Time
 	EndTime   *time.Time
 	Model     string
@@ -305,6 +307,29 @@ type LifecycleListResponse struct {
 	Items    []LifecycleEvent `json:"items"`
 }
 
+// 作者：long。界面只需要固定终态字段，避免下载任意认证Metadata，也不把终态ID误作计费用量ID。
+type LifecycleViewEvent struct {
+	RequestID      string     `json:"request_id"`
+	TraceID        string     `json:"trace_id"`
+	SourceFormat   string     `json:"source_format"`
+	Model          string     `json:"model"`
+	RequestedModel string     `json:"requested_model"`
+	Stream         bool       `json:"stream"`
+	Outcome        string     `json:"outcome"`
+	StatusCode     int        `json:"status_code"`
+	Error          string     `json:"error,omitempty"`
+	StartedAt      *time.Time `json:"started_at,omitempty"`
+	CompletedAt    *time.Time `json:"completed_at,omitempty"`
+	ReceivedAt     time.Time  `json:"received_at"`
+}
+
+type LifecycleViewResponse struct {
+	Total    int64                `json:"total"`
+	Page     int                  `json:"page"`
+	PageSize int                  `json:"page_size"`
+	Items    []LifecycleViewEvent `json:"items"`
+}
+
 // FailureStat aggregates failed requests by upstream status and error type.
 type FailureStat struct {
 	StatusCode int    `json:"status_code"`
@@ -366,21 +391,23 @@ type OptionsResponse struct {
 // ReclaimableBytes is the space held by free pages and WAL data; VACUUM and a
 // WAL truncate checkpoint release it.
 type StorageStats struct {
-	DBPath           string `json:"db_path"`
-	DBSizeBytes      int64  `json:"db_size_bytes"`
-	WALSizeBytes     int64  `json:"wal_size_bytes"`
-	SHMSizeBytes     int64  `json:"shm_size_bytes"`
-	TotalSizeBytes   int64  `json:"total_size_bytes"`
-	RecordCount      int64  `json:"record_count"`
-	OldestRecordAt   string `json:"oldest_record_at,omitempty"`
-	NewestRecordAt   string `json:"newest_record_at,omitempty"`
-	ReclaimableBytes int64  `json:"reclaimable_bytes"`
-	RetentionDays    int    `json:"retention_days"`
+	DBPath               string `json:"db_path"`
+	DBSizeBytes          int64  `json:"db_size_bytes"`
+	WALSizeBytes         int64  `json:"wal_size_bytes"`
+	SHMSizeBytes         int64  `json:"shm_size_bytes"`
+	TotalSizeBytes       int64  `json:"total_size_bytes"`
+	RecordCount          int64  `json:"record_count"`
+	LifecycleRecordCount int64  `json:"lifecycle_record_count"`
+	OldestRecordAt       string `json:"oldest_record_at,omitempty"`
+	NewestRecordAt       string `json:"newest_record_at,omitempty"`
+	ReclaimableBytes     int64  `json:"reclaimable_bytes"`
+	RetentionDays        int    `json:"retention_days"`
 }
 
 // StorageCleanupResponse reports the number of deleted records and the
 // resulting database footprint after an explicit dashboard cleanup. 作者：long
 type StorageCleanupResponse struct {
-	DeletedRecords int64         `json:"deleted_records"`
-	Stats          *StorageStats `json:"stats"`
+	DeletedRecords          int64         `json:"deleted_records"`
+	DeletedLifecycleRecords int64         `json:"deleted_lifecycle_records"`
+	Stats                   *StorageStats `json:"stats"`
 }

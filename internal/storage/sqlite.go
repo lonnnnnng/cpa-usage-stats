@@ -270,6 +270,8 @@ var tableColumns = []struct{ name, ddl string }{
 // the composites cover the common "recent failures" and "group by model within
 // a range" access patterns.
 var tableIndexes = []string{
+	// 作者：long。保留历史重复行，非唯一索引用于阻止后续重放重复计费，不会因旧数据重复而升级失败。
+	`CREATE INDEX IF NOT EXISTS idx_usage_request_id ON usage_records(request_id)`,
 	`CREATE INDEX IF NOT EXISTS idx_usage_requested_at ON usage_records(requested_at DESC)`,
 	`CREATE INDEX IF NOT EXISTS idx_usage_model ON usage_records(model, requested_at)`,
 	`CREATE INDEX IF NOT EXISTS idx_usage_provider ON usage_records(provider, requested_at)`,
@@ -344,6 +346,7 @@ func (s *Storage) ensureSchema() error {
 
 	// 作者：long。终态列表按接收时间排序，范围统计按完成时间筛选，分别建索引避免每次扫描并排序全表。
 	for _, index := range []string{
+		`CREATE INDEX IF NOT EXISTS idx_lifecycle_event_time ON request_lifecycle(COALESCE(NULLIF(completed_at, ''), received_at))`,
 		`CREATE INDEX IF NOT EXISTS idx_lifecycle_completed ON request_lifecycle(completed_at)`,
 		`CREATE INDEX IF NOT EXISTS idx_lifecycle_received ON request_lifecycle(received_at DESC)`,
 	} {
@@ -411,7 +414,8 @@ func (s *Storage) InsertBatch(records []model.UsageRecord) error {
 			audio_input_tokens, video_input_tokens, file_input_tokens, cached_text_tokens,
 			cached_image_tokens, cached_audio_tokens, text_output_tokens, image_output_tokens,
 			audio_output_tokens
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+		WHERE ? OR NOT EXISTS (SELECT 1 FROM usage_records WHERE request_id = ?)
 	`)
 	if err != nil {
 		return fmt.Errorf("prepare insert: %w", err)
@@ -489,6 +493,8 @@ func (s *Storage) InsertBatch(records []model.UsageRecord) error {
 			r.Detail.TextOutputTokens,
 			r.Detail.ImageOutputTokens,
 			r.Detail.AudioOutputTokens,
+			strings.TrimSpace(r.RequestID) == "",
+			r.RequestID,
 		)
 		if err != nil {
 			return fmt.Errorf("exec insert: %w", err)
@@ -516,6 +522,10 @@ func (s *Storage) StoreLifecycle(event model.RequestCompletion) error {
 		}
 	}
 	startedAt, completedAt := "", ""
+	// 作者：long。错误文本仅保留诊断所需长度，避免终态事件绕过用量失败正文的容量限制。
+	if len(event.Error) > maxFailureBody {
+		event.Error = strings.ToValidUTF8(event.Error[:maxFailureBody], "")
+	}
 	if !event.StartedAt.IsZero() {
 		startedAt = timezone.FormatStorage(event.StartedAt)
 	}
@@ -545,16 +555,22 @@ func lifecycleWhere(filter model.UsageFilter) (string, []interface{}) {
 	var clauses []string
 	var args []interface{}
 	if filter.StartTime != nil {
-		clauses = append(clauses, "completed_at >= ?")
+		clauses = append(clauses, lifecycleTimeSQL+" >= ?")
 		args = append(args, timezone.FormatStorage(*filter.StartTime))
 	}
 	if filter.EndTime != nil {
-		clauses = append(clauses, "completed_at < ?")
+		clauses = append(clauses, lifecycleTimeSQL+" < ?")
 		args = append(args, timezone.FormatStorage(*filter.EndTime))
 	}
 	if filter.Trace != "" {
 		clauses = append(clauses, "trace_id = ?")
 		args = append(args, filter.Trace)
+	}
+	for _, field := range []struct{ column, value string }{{"request_id", filter.RequestID}, {"outcome", filter.Outcome}, {"model", filter.Model}} {
+		if field.value != "" {
+			clauses = append(clauses, field.column+" = ?")
+			args = append(args, field.value)
+		}
 	}
 	where := ""
 	if len(clauses) > 0 {
@@ -582,6 +598,11 @@ func (s *Storage) GetLifecycleSummaryLocked(filter model.UsageFilter) (model.Lif
 
 // GetLifecycle returns terminal events for management clients.
 func (s *Storage) GetLifecycle(filter model.UsageFilter) (*model.LifecycleListResponse, error) {
+	return s.getLifecycle(filter, true)
+}
+
+// 作者：long。精简终态视图不读取Metadata；老管理客户端仍可使用原始接口。
+func (s *Storage) getLifecycle(filter model.UsageFilter, includeMetadata bool) (*model.LifecycleListResponse, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	where, args := lifecycleWhere(filter)
@@ -598,11 +619,15 @@ func (s *Storage) GetLifecycle(filter model.UsageFilter) (*model.LifecycleListRe
 	if total == 0 || int64(page-1) > (total-1)/int64(pageSize) {
 		return &model.LifecycleListResponse{Total: total, Page: page, PageSize: pageSize, Items: []model.LifecycleEvent{}}, nil
 	}
+	metadataColumn := "''"
+	if includeMetadata {
+		metadataColumn = "COALESCE(metadata, '')"
+	}
 	rows, err := s.db.Query(`SELECT request_id, COALESCE(trace_id, ''), COALESCE(source_format, ''),
 		COALESCE(model, ''), COALESCE(requested_model, ''), stream, outcome, status_code,
 		COALESCE(error, ''), COALESCE(started_at, ''), COALESCE(completed_at, ''),
-		COALESCE(metadata, ''), received_at FROM request_lifecycle `+where+
-		` ORDER BY received_at DESC LIMIT ? OFFSET ?`, append(args, pageSize, (page-1)*pageSize)...)
+		`+metadataColumn+`, received_at FROM request_lifecycle `+where+
+		` ORDER BY received_at DESC, request_id DESC LIMIT ? OFFSET ?`, append(args, pageSize, (page-1)*pageSize)...)
 	if err != nil {
 		return nil, fmt.Errorf("query lifecycle events: %w", err)
 	}
@@ -634,8 +659,13 @@ func parseStorageTime(value string) time.Time {
 	if value == "" {
 		return time.Time{}
 	}
-	parsed, _ := time.Parse(timeLayout, value)
-	return parsed
+	// 作者：long。SQLite的DATETIME列可能经驱动转成RFC3339，兼容它与原UTC无时区格式，避免终态时间变为零值。
+	for _, layout := range []string{time.RFC3339Nano, timeLayout, "2006-01-02 15:04:05"} {
+		if parsed, err := time.Parse(layout, value); err == nil {
+			return parsed.UTC()
+		}
+	}
+	return time.Time{}
 }
 
 func buildWhere(filter model.UsageFilter) (string, []interface{}) {
@@ -686,8 +716,9 @@ func buildWhere(filter model.UsageFilter) (string, []interface{}) {
 		}
 	}
 	if filter.Keyword != "" {
-		kw := "%" + filter.Keyword + "%"
-		clauses = append(clauses, "(request_id LIKE ? OR trace_id LIKE ? OR selection_id LIKE ? OR session_id LIKE ? OR model LIKE ? OR alias LIKE ? OR api_key LIKE ? OR failure_body LIKE ?)")
+		// 作者：long。搜索框表示字面子串，模型名中的下划线和输入的百分号不能扩大成SQL通配符。
+		kw := "%" + strings.NewReplacer("!", "!!", "%", "!%", "_", "!_").Replace(filter.Keyword) + "%"
+		clauses = append(clauses, "(request_id LIKE ? ESCAPE '!' OR trace_id LIKE ? ESCAPE '!' OR selection_id LIKE ? ESCAPE '!' OR session_id LIKE ? ESCAPE '!' OR model LIKE ? ESCAPE '!' OR alias LIKE ? ESCAPE '!' OR api_key LIKE ? ESCAPE '!' OR failure_body LIKE ? ESCAPE '!')")
 		args = append(args, kw, kw, kw, kw, kw, kw, kw, kw)
 	}
 
@@ -920,13 +951,14 @@ func (s *Storage) Stats(retentionDays int) (*model.StorageStats, error) {
 		return nil, fmt.Errorf("read page_size: %w", err)
 	}
 
-	var recordCount int64
+	var recordCount, lifecycleRecordCount int64
 	var oldest, newest sql.NullString
 	if err := s.db.QueryRow(
 		// 作者：long。独立标量子查询让 COUNT 使用计数路径，最早/最晚时间各取索引端点。
 		`SELECT (SELECT COUNT(*) FROM usage_records),
-		 (SELECT MIN(requested_at) FROM usage_records), (SELECT MAX(requested_at) FROM usage_records)`,
-	).Scan(&recordCount, &oldest, &newest); err != nil {
+		 (SELECT MIN(requested_at) FROM usage_records), (SELECT MAX(requested_at) FROM usage_records),
+		 (SELECT COUNT(*) FROM request_lifecycle)`,
+	).Scan(&recordCount, &oldest, &newest, &lifecycleRecordCount); err != nil {
 		return nil, fmt.Errorf("query storage totals: %w", err)
 	}
 
@@ -935,16 +967,17 @@ func (s *Storage) Stats(retentionDays int) (*model.StorageStats, error) {
 	shmSize := fileSize(s.dbPath + "-shm")
 
 	return &model.StorageStats{
-		DBPath:           s.dbPath,
-		DBSizeBytes:      dbSize,
-		WALSizeBytes:     walSize,
-		SHMSizeBytes:     shmSize,
-		TotalSizeBytes:   dbSize + walSize + shmSize,
-		RecordCount:      recordCount,
-		OldestRecordAt:   oldest.String,
-		NewestRecordAt:   newest.String,
-		ReclaimableBytes: freePages * pageSize,
-		RetentionDays:    retentionDays,
+		DBPath:               s.dbPath,
+		DBSizeBytes:          dbSize,
+		WALSizeBytes:         walSize,
+		SHMSizeBytes:         shmSize,
+		TotalSizeBytes:       dbSize + walSize + shmSize,
+		RecordCount:          recordCount,
+		LifecycleRecordCount: lifecycleRecordCount,
+		OldestRecordAt:       oldest.String,
+		NewestRecordAt:       newest.String,
+		ReclaimableBytes:     freePages * pageSize,
+		RetentionDays:        retentionDays,
 	}, nil
 }
 
@@ -974,51 +1007,57 @@ func fileSize(path string) int64 {
 	return info.Size()
 }
 
-// CleanRetention removes records older than retentionDays.
+// CleanRetention applies the configured retention window to both usage and terminal events.
 func (s *Storage) CleanRetention(retentionDays int) (int64, error) {
 	if retentionDays <= 0 {
 		return 0, nil
 	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	cutoff := timezone.FormatStorage(time.Now().In(timezone.BusinessLocation).AddDate(0, 0, -retentionDays))
-	res, err := s.db.Exec("DELETE FROM usage_records WHERE requested_at < ?", cutoff)
-	if err != nil {
-		return 0, fmt.Errorf("clean retention: %w", err)
-	}
-	return res.RowsAffected()
+	cutoff := time.Now().In(timezone.BusinessLocation).AddDate(0, 0, -retentionDays)
+	usage, lifecycle, err := s.DeleteRangeWithCounts(nil, &cutoff)
+	return usage + lifecycle, err
 }
 
-// DeleteRange deletes records in the half-open Beijing-calendar interval [start,end).
-// Nil boundaries mean unbounded, which is used by the explicit "all" cleanup.
-// The caller performs VACUUM separately so the deleted count can be reported
-// before the database is compacted. 作者：long
+// DeleteRange retains the usage-only count contract for existing internal callers. 作者：long。
 func (s *Storage) DeleteRange(start, end *time.Time) (int64, error) {
+	usage, _, err := s.DeleteRangeWithCounts(start, end)
+	return usage, err
+}
+
+// 作者：long。两类记录各按自身事件时间在同一事务删除；缺完成时间的终态按接收时间清理，防止永久残留。
+func (s *Storage) DeleteRangeWithCounts(start, end *time.Time) (int64, int64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
-	where := ""
-	args := []any{}
-	if start != nil {
-		where = "requested_at >= ?"
-		args = append(args, timezone.FormatStorage(*start))
-	}
-	if end != nil {
-		if where != "" {
-			where += " AND "
-		}
-		where += "requested_at < ?"
-		args = append(args, timezone.FormatStorage(*end))
-	}
-	query := "DELETE FROM usage_records"
-	if where != "" {
-		query += " WHERE " + where
-	}
-	res, err := s.db.Exec(query, args...)
+	tx, err := s.db.Begin()
 	if err != nil {
-		return 0, fmt.Errorf("delete usage records: %w", err)
+		return 0, 0, err
 	}
-	return res.RowsAffected()
+	defer tx.Rollback()
+	counts := [2]int64{}
+	for i, spec := range []struct{ table, column string }{{"usage_records", "requested_at"}, {"request_lifecycle", lifecycleTimeSQL}} {
+		clauses, args := []string{}, []any{}
+		if start != nil {
+			clauses = append(clauses, spec.column+" >= ?")
+			args = append(args, timezone.FormatStorage(*start))
+		}
+		if end != nil {
+			clauses = append(clauses, spec.column+" < ?")
+			args = append(args, timezone.FormatStorage(*end))
+		}
+		query := "DELETE FROM " + spec.table
+		if len(clauses) > 0 {
+			query += " WHERE " + strings.Join(clauses, " AND ")
+		}
+		result, err := tx.Exec(query, args...)
+		if err != nil {
+			return 0, 0, fmt.Errorf("delete %s: %w", spec.table, err)
+		}
+		counts[i], err = result.RowsAffected()
+		if err != nil {
+			return 0, 0, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, 0, err
+	}
+	return counts[0], counts[1], nil
 }

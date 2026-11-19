@@ -1,4 +1,6 @@
 import type {
+  LifecycleFilters,
+  LifecycleListResponse,
   OptionsResponse,
   OverviewData,
   RecordListResponse,
@@ -115,6 +117,32 @@ export function fetchRecords(
 
 export function fetchOptions(key: string, signal?: AbortSignal): Promise<OptionsResponse> {
   return request<OptionsResponse>(key, "/options", {}, "GET", signal);
+}
+
+// 作者：long。终态是独立事件，按自己的筛选查询；界面投影排除无展示用途的任意Metadata。
+export function fetchLifecycle(
+  key: string,
+  range: string,
+  filters: LifecycleFilters,
+  page: number,
+  signal?: AbortSignal,
+): Promise<LifecycleListResponse> {
+  return request<LifecycleListResponse>(
+    key,
+    "/lifecycle",
+    {
+      range,
+      view: "events",
+      request_id: filters.requestId,
+      trace_id: filters.traceId,
+      model: filters.model,
+      outcome: filters.outcome,
+      page: String(page),
+      page_size: "20",
+    },
+    "GET",
+    signal,
+  );
 }
 
 export function fetchStats(key: string): Promise<RuntimeStats> {

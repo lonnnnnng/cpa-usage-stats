@@ -439,29 +439,25 @@ export function RecordsTab({
       setJumpPage(String(page));
     }
   };
+  // 作者：long。把全部文本条件归一化后一次提交，避免空格反复重置页码或多个定时器覆盖彼此的条件。
   useEffect(() => {
-    if (keyword === filters.keyword) return;
-    const timer = setTimeout(() => onFiltersChange({ ...filters, keyword: keyword.trim() }), 300);
+    const next = {
+      ...filters,
+      keyword: keyword.trim(),
+      sessionId: sessionId.trim(),
+      traceId: traceId.trim(),
+      selectionId: selectionId.trim(),
+    };
+    if (
+      next.keyword === filters.keyword &&
+      next.sessionId === filters.sessionId &&
+      next.traceId === filters.traceId &&
+      next.selectionId === filters.selectionId
+    )
+      return;
+    const timer = setTimeout(() => onFiltersChange(next), 300);
     return () => clearTimeout(timer);
-  }, [keyword, filters, onFiltersChange]);
-
-  useEffect(() => {
-    if (sessionId === filters.sessionId) return;
-    const timer = setTimeout(() => onFiltersChange({ ...filters, sessionId: sessionId.trim() }), 300);
-    return () => clearTimeout(timer);
-  }, [sessionId, filters, onFiltersChange]);
-
-  useEffect(() => {
-    if (traceId === filters.traceId) return;
-    const timer = setTimeout(() => onFiltersChange({ ...filters, traceId: traceId.trim() }), 300);
-    return () => clearTimeout(timer);
-  }, [traceId, filters, onFiltersChange]);
-
-  useEffect(() => {
-    if (selectionId === filters.selectionId) return;
-    const timer = setTimeout(() => onFiltersChange({ ...filters, selectionId: selectionId.trim() }), 300);
-    return () => clearTimeout(timer);
-  }, [selectionId, filters, onFiltersChange]);
+  }, [keyword, sessionId, traceId, selectionId, filters, onFiltersChange]);
 
   const setFilter = (patch: Partial<RecordsFilters>) => {
     onFiltersChange({ ...filters, ...patch });
@@ -510,7 +506,7 @@ export function RecordsTab({
           )}
         </div>
 
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <div className="relative">
             <Search className="absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -521,22 +517,6 @@ export function RecordsTab({
               className="pl-8"
             />
           </div>
-
-          <Input
-            value={traceId}
-            onChange={(event) => setTraceId(event.target.value)}
-            placeholder="Trace ID"
-            aria-label="Trace ID"
-            className="font-mono text-xs"
-          />
-
-          <Input
-            value={selectionId}
-            onChange={(event) => setSelectionId(event.target.value)}
-            placeholder="Selection ID"
-            aria-label="Selection ID"
-            className="font-mono text-xs"
-          />
 
           <FilterSelect
             value={filters.model}
@@ -570,16 +550,6 @@ export function RecordsTab({
             className="w-full"
           />
 
-          <div className="relative">
-            <Input
-              value={sessionId}
-              onChange={(event) => setSessionId(event.target.value)}
-              placeholder={t("records.filter.session_placeholder")}
-              aria-label={t("records.filter.session_placeholder")}
-              className="font-mono text-xs"
-            />
-          </div>
-
           <FilterSelect
             value={filters.status === "all" ? "" : filters.status}
             onChange={(value) => setFilter({ status: (value || "all") as RecordsFilters["status"] })}
@@ -591,6 +561,40 @@ export function RecordsTab({
             className="w-full"
           />
         </div>
+        <p className="text-xs text-muted-foreground">{t("records.filter_scope")}</p>
+        <details className="text-xs">
+          <summary className="w-fit cursor-pointer text-muted-foreground">
+            {t("records.advanced_filters")} · {[traceId, sessionId, selectionId].filter((value) => value.trim()).length}
+          </summary>
+          <div className="mt-2 grid gap-2 sm:grid-cols-3">
+            <Input
+              value={traceId}
+              onChange={(event) => setTraceId(event.target.value)}
+              placeholder="Trace ID"
+              aria-label="Trace ID"
+              className="font-mono text-xs"
+            />
+
+            <Input
+              value={selectionId}
+              onChange={(event) => setSelectionId(event.target.value)}
+              placeholder="Selection ID"
+              aria-label="Selection ID"
+              className="font-mono text-xs"
+            />
+
+            <div className="relative">
+              <Input
+                value={sessionId}
+                onChange={(event) => setSessionId(event.target.value)}
+                placeholder={t("records.filter.session_placeholder")}
+                aria-label={t("records.filter.session_placeholder")}
+                className="font-mono text-xs"
+              />
+            </div>
+          </div>
+          <p className="mt-2 text-muted-foreground">{t("records.exact_filter_hint")}</p>
+        </details>
       </CardHeader>
 
       <CardContent className="px-0">

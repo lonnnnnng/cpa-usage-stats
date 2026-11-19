@@ -54,7 +54,8 @@
     "tabs": {
       "overview": "Overview",
       "records": "Records",
-      "storage": "Storage"
+      "storage": "Storage",
+      "lifecycle": "Completions"
     },
     "load_failed": "Failed to load data: {{message}}",
     "empty": {
@@ -190,10 +191,10 @@
     "filter": {
       "model_all": "All models",
       "provider_all": "All providers",
-      "key_all": "All keys",
-      "status_all": "All statuses",
-      "status_success": "Success only (2xx)",
-      "status_failed": "Failed only (4xx/5xx)",
+      "key_all": "All client keys",
+      "status_all": "All execution results",
+      "status_success": "Execution succeeded",
+      "status_failed": "Execution failed",
       "auth_all": "All credentials",
       "session_placeholder": "Session ID"
     },
@@ -296,7 +297,10 @@
       "jump": "Go to",
       "page_unit": "page",
       "page_size": "Rows per page"
-    }
+    },
+    "advanced_filters": "Advanced filters",
+    "exact_filter_hint": "Trace, session and selection IDs use exact matching. Selection IDs are only available when reported by a scheduler.",
+    "filter_scope": "Filters apply to usage records only. Search matches literal text in models, keys, request/trace/session IDs or failure bodies."
   },
   "storage": {
     "title": "Storage",
@@ -313,7 +317,7 @@
     "oldest": "Oldest record",
     "newest": "Newest record",
     "reclaimable": "Reclaimable",
-    "retention_hint": "Expired records are purged by a background job every 12 hours; adjust the retention via the retention_days plugin option.",
+    "retention_hint": "Usage records and completion events share the retention window and are cleaned every 12 hours. Events without completion time use received time.",
     "reclaimable_hint": "SQLite does not shrink the file after deletes. Reclaiming runs VACUUM and truncates the WAL.",
     "reclaim": "Reclaim space",
     "reclaim_title": "Reclaim database space?",
@@ -325,15 +329,16 @@
     "load_failed": "Failed to load storage info: {{message}}",
     "clear_data": "Clear data",
     "clearing": "Clearing...",
-    "clear_title": "Clear usage data?",
-    "clear_desc": "Calls in the selected range will be permanently deleted and the database compacted. Confirm the cleanup range.",
+    "clear_title": "Clear usage and completion data?",
+    "clear_desc": "Delete usage records and completion events in the selected range, then reclaim space. This cannot be undone. Completion events use completed time, or received time when unavailable.",
     "clear_today": "Today",
     "clear_7d": "Last 7 days",
     "clear_30d": "Last 30 days",
     "clear_all": "All data",
     "clear_confirm": "Clear now",
-    "cleared": "Cleared {{count}} records",
-    "clear_failed": "Failed to clear data: {{message}}"
+    "cleared": "Deleted {{count}} usage records and {{lifecycle}} completion events",
+    "clear_failed": "Failed to clear data: {{message}}",
+    "lifecycle_records": "{{count}} completion events"
   },
   "auth": {
     "title": "Management key required",
@@ -368,5 +373,30 @@
     "less": "Less",
     "more": "More",
     "empty": "No activity in this range"
+  },
+  "lifecycle": {
+    "title": "Request completion events",
+    "description": "Completed, failed, rejected and canceled events reported by CPA, including requests without token usage. Events can arrive late; a missing event does not imply an active request. Completion IDs differ from execution IDs in usage records.",
+    "request_id": "Completion request ID",
+    "model_filter": "Model (exact match)",
+    "model": "Model / protocol",
+    "requested": "Requested model",
+    "outcome": "Outcome",
+    "all": "All outcomes",
+    "succeeded": "Succeeded",
+    "failed": "Failed",
+    "rejected": "Rejected",
+    "canceled": "Canceled",
+    "reset": "Reset",
+    "completed": "Completed at",
+    "received": "Received at",
+    "started": "Started at",
+    "duration": "Execution duration",
+    "details": "View details",
+    "received_fallback": "Received time",
+    "no_status": "No HTTP status reported",
+    "empty": "No matching completion events in this range",
+    "count": "{{count}} completion events",
+    "not_loaded": "Completion data has not loaded. Connect or refresh to retry."
   }
 }

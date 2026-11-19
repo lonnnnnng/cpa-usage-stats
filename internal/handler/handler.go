@@ -28,6 +28,13 @@ func Handle(store *storage.Storage, html []byte, req model.ManagementRequest, re
 	}
 
 	filter, hourly := parseFilter(req.Query)
+	if strings.HasSuffix(req.Path, "/records") || strings.HasSuffix(req.Path, "/summary") {
+		switch strings.TrimSpace(req.Query.Get("failed")) {
+		case "", "true", "false", "1", "0":
+		default:
+			return jsonError(http.StatusBadRequest, "invalid_failed", "failed must be true, false, 1, or 0")
+		}
+	}
 	switch strings.TrimPrefix(req.Path, APIBasePath) {
 	case "/summary":
 		// 作者：long。只在显式选择概览时裁剪关联明细，省略 view 的旧客户端仍收到完整统计。
@@ -54,6 +61,18 @@ func Handle(store *storage.Storage, html []byte, req model.ManagementRequest, re
 		}
 		return jsonOK(records)
 	case "/lifecycle":
+		switch filter.Outcome {
+		case "", "succeeded", "failed", "rejected", "canceled":
+		default:
+			return jsonError(http.StatusBadRequest, "invalid_outcome", "outcome must be succeeded, failed, rejected, or canceled")
+		}
+		if req.Query.Get("view") == "events" {
+			lifecycle, err := store.GetLifecycleView(filter)
+			if err != nil {
+				return jsonError(http.StatusInternalServerError, "query_lifecycle_failed", err.Error())
+			}
+			return jsonOK(lifecycle)
+		}
 		lifecycle, err := store.GetLifecycle(filter)
 		if err != nil {
 			return jsonError(http.StatusInternalServerError, "query_lifecycle_failed", err.Error())
@@ -94,7 +113,7 @@ func Handle(store *storage.Storage, html []byte, req model.ManagementRequest, re
 		if err != nil {
 			return jsonError(http.StatusBadRequest, "invalid_cleanup_range", err.Error())
 		}
-		deleted, err := store.DeleteRange(start, end)
+		deleted, deletedLifecycle, err := store.DeleteRangeWithCounts(start, end)
 		if err != nil {
 			return jsonError(http.StatusInternalServerError, "clear_failed", err.Error())
 		}
@@ -105,7 +124,7 @@ func Handle(store *storage.Storage, html []byte, req model.ManagementRequest, re
 		if err != nil {
 			return jsonError(http.StatusInternalServerError, "query_storage_failed", err.Error())
 		}
-		return jsonOK(model.StorageCleanupResponse{DeletedRecords: deleted, Stats: stats})
+		return jsonOK(model.StorageCleanupResponse{DeletedRecords: deleted, DeletedLifecycleRecords: deletedLifecycle, Stats: stats})
 	default:
 		return jsonError(http.StatusNotFound, "not_found", "unknown endpoint")
 	}
@@ -162,6 +181,8 @@ func parseFilterAt(q map[string][]string, now time.Time) (model.UsageFilter, boo
 	}
 
 	filter := model.UsageFilter{
+		RequestID: get("request_id"),
+		Outcome:   get("outcome"),
 		Model:     get("model"),
 		Provider:  get("provider"),
 		APIKey:    get("api_key"),

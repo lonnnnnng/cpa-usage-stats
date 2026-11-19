@@ -86,6 +86,34 @@ export interface LifecycleSummary {
   canceled: number;
 }
 
+export type LifecycleOutcome = "succeeded" | "failed" | "rejected" | "canceled";
+export interface LifecycleFilters {
+  requestId: string;
+  traceId: string;
+  model: string;
+  outcome: LifecycleOutcome | "";
+}
+export interface LifecycleEvent {
+  request_id: string;
+  trace_id: string;
+  source_format: string;
+  model: string;
+  requested_model: string;
+  stream: boolean;
+  outcome: LifecycleOutcome;
+  status_code: number;
+  error?: string;
+  started_at?: string;
+  completed_at?: string;
+  received_at: string;
+}
+export interface LifecycleListResponse {
+  total: number;
+  page: number;
+  page_size: number;
+  items: LifecycleEvent[];
+}
+
 export interface StoredRecord {
   id: number;
   request_id: string;
@@ -165,6 +193,7 @@ export interface StorageStats {
   shm_size_bytes: number;
   total_size_bytes: number;
   record_count: number;
+  lifecycle_record_count: number;
   oldest_record_at?: string;
   newest_record_at?: string;
   reclaimable_bytes: number;
@@ -175,6 +204,7 @@ export type StorageCleanupRange = "today" | "7d" | "30d" | "all";
 
 export interface StorageCleanupResponse {
   deleted_records: number;
+  deleted_lifecycle_records: number;
   stats: StorageStats;
 }
 

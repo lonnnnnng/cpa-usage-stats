@@ -42,7 +42,15 @@ function InfoRow({ label, value, mono = true }: { label: string; value: string; 
 }
 
 /** 空间占用：数据库文件大小、记录范围、保留策略与手动回收。 */
-export function StorageTab({ apiKey, authorized }: { apiKey: string; authorized: boolean }) {
+export function StorageTab({
+  apiKey,
+  authorized,
+  onUnauthorized,
+}: {
+  apiKey: string;
+  authorized: boolean;
+  onUnauthorized: () => void;
+}) {
   const { t } = useI18n();
   const { formatNumber } = useFormat();
   const queryClient = useQueryClient();
@@ -55,7 +63,14 @@ export function StorageTab({ apiKey, authorized }: { apiKey: string; authorized:
     queryKey,
     enabled: Boolean(apiKey) && authorized,
     retry: (count, error) => !(error instanceof UnauthorizedError) && count < 1,
-    queryFn: ({ signal }) => fetchStorage(apiKey, signal),
+    queryFn: async ({ signal }) => {
+      try {
+        return await fetchStorage(apiKey, signal);
+      } catch (error) {
+        if (error instanceof UnauthorizedError) onUnauthorized();
+        throw error;
+      }
+    },
     refetchOnWindowFocus: false,
   });
 
@@ -75,11 +90,16 @@ export function StorageTab({ apiKey, authorized }: { apiKey: string; authorized:
 
   const cleanup = useMutation({
     mutationFn: () => clearStorage(apiKey, cleanupRange),
-    onSuccess: ({ deleted_records, stats }) => {
+    onSuccess: ({ deleted_records, deleted_lifecycle_records, stats }) => {
       queryClient.setQueryData(queryKey, stats);
       void queryClient.invalidateQueries({ queryKey: ["usage"] });
       setClearOpen(false);
-      toast.success(t("storage.cleared", { count: formatNumber(deleted_records) }));
+      toast.success(
+        t("storage.cleared", {
+          count: formatNumber(deleted_records),
+          lifecycle: formatNumber(deleted_lifecycle_records),
+        }),
+      );
     },
     onError: (error: Error) => {
       setClearOpen(false);
@@ -155,7 +175,11 @@ export function StorageTab({ apiKey, authorized }: { apiKey: string; authorized:
                     value={formatBytes(data.wal_size_bytes)}
                     hint={t("storage.shm_size", { size: formatBytes(data.shm_size_bytes) })}
                   />
-                  <StatCell label={t("storage.records")} value={formatNumber(data.record_count)} />
+                  <StatCell
+                    label={t("storage.records")}
+                    value={formatNumber(data.record_count)}
+                    hint={t("storage.lifecycle_records", { count: formatNumber(data.lifecycle_record_count) })}
+                  />
                 </div>
               </div>
 

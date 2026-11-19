@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, mock, test } from "node:test";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
-import { usageQueryOptions } from "../src/lib/usage-queries.ts";
+import { lifecycleQueryOptions, usageQueryOptions } from "../src/lib/usage-queries.ts";
 import type { OverviewData, RecordsFilters } from "../src/types/index.ts";
 
 const filters: RecordsFilters = {
@@ -57,6 +57,20 @@ function browser() {
   });
 }
 
+test("completion queries isolate filters, pagination and credentials while sharing cleanup invalidation", () => {
+  const filter = { requestId: "life-1", traceId: "", model: "", outcome: "" as const };
+  const a = lifecycleQueryOptions("synthetic-a", "all", filter, 1);
+  const b = lifecycleQueryOptions("synthetic-a", "all", filter, 2);
+  assert.equal(a.queryKey[0], "usage");
+  assert.notDeepEqual(a.queryKey, b.queryKey);
+  assert.notDeepEqual(a.queryKey, lifecycleQueryOptions("synthetic-b", "all", filter, 1).queryKey);
+  assert.notDeepEqual(a.queryKey, lifecycleQueryOptions("synthetic-a", "today", filter, 1).queryKey);
+  assert.notDeepEqual(
+    a.queryKey,
+    lifecycleQueryOptions("synthetic-a", "all", { ...filter, outcome: "rejected" }, 1).queryKey,
+  );
+});
+
 test("pagination never changes summary or option cache keys; credentials isolate caches", () => {
   const a = usageQueryOptions("synthetic-a", "all", filters, 1, 15);
   const b = usageQueryOptions("synthetic-a", "all", filters, 2, 100);
@@ -74,6 +88,30 @@ test("invalid authentication probe has no retries or downstream requests", async
     await assert.rejects(client.fetchQuery(usageQueryOptions("synthetic-invalid", "all", filters, 1, 15).options));
     assert.equal(fetchMock.mock.calls.length, 1);
     assert.ok(String(fetchMock.mock.calls[0].arguments[0]).endsWith("/options"));
+  } finally {
+    client.clear();
+  }
+});
+
+test("a completion 401 revokes authorization once; network errors do not revoke it", async () => {
+  browser();
+  const client = new QueryClient();
+  let rejected = 0;
+  const options = lifecycleQueryOptions(
+    "synthetic-ok",
+    "all",
+    { requestId: "", traceId: "", model: "", outcome: "" },
+    1,
+    () => rejected++,
+  );
+  const fetchMock = mock.method(globalThis, "fetch", async () => new Response("{}", { status: 401 }));
+  try {
+    await assert.rejects(client.fetchQuery(options));
+    assert.equal(rejected, 1);
+    assert.equal(fetchMock.mock.calls.length, 1);
+    fetchMock.mock.mockImplementation(async () => new Response("{}", { status: 503 }));
+    await assert.rejects(client.fetchQuery({ ...options, retry: false }));
+    assert.equal(rejected, 1);
   } finally {
     client.clear();
   }

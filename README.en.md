@@ -28,6 +28,18 @@ These improvements come from [tom2almighty/cpa-usage-stats](https://github.com/t
 - Embedded dashboard with usage trends, breakdowns, token composition, an activity heatmap, request details and storage usage.
 - Configurable retention, excluded models and batch-write parameters.
 
+### Completion events and reliability
+
+The Completions tab shows events reported by CPA, including rejected/canceled requests without token usage. Filter by time, completion request ID, trace ID, model and outcome. Completion IDs and usage execution IDs belong to different layers; a trace can have multiple events. Missing events do not imply an active request, and unreported HTTP status remains unknown.
+
+The UI uses `/lifecycle?view=events`, which excludes arbitrary Metadata. The original endpoint remains available without this view. Events without completion time use received time for filtering and retention. Usage and completion data share `retention_days`; manual cleanup deletes both in one transaction and returns separate `deleted_records` and `deleted_lifecycle_records` counts. Storage stats add `lifecycle_record_count`.
+
+Repeated usage with the same nonempty execution Request ID is ignored while its first record is retained. Historical duplicates and records without IDs are preserved. A full queue or paused plugin returns a rejection so retry-capable host paths can retry; ordinary local delivery does not guarantee retries. Successful acknowledgment means queued, not yet durable. Completion writes hold the instance lock until storage finishes so reconfiguration cannot close the database early.
+
+### Usage record filters
+
+Model, provider, client key, credential and execution result filters match stored values. Exact trace/session/selection IDs are under Advanced filters; selection IDs require scheduler reporting. Search matches literal substrings in request/trace/selection/session IDs, model, alias, client key and failure body; `%` and `_` are literal characters. Combined normalized debouncing avoids page resets caused by whitespace. Record filters do not affect the overview. Options refresh every 60 seconds while viewing records, stopping on authentication failure.
+
 ### Summary API
 
 `GET /v0/management/plugins/cpa-usage-stats/summary` retains the complete response and existing range/filter parameters.

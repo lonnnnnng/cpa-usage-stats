@@ -36,6 +36,18 @@ CLIProxyAPI（CPA 8.0+）用量统计插件：通过 usage 插件接口采集请
 - `/v0/management/plugins/cpa-usage-stats/lifecycle` 提供请求终态分页，区分 `succeeded`、`failed`、`rejected`、`canceled`；
 - 旧 SQLite 数据库采用追加式迁移；Worker 停止幂等，批量写入失败会有限重试并报告 `write_errors`。
 
+### 请求终态与统计可靠性
+
+看板增加“请求终态”页签，可按时间范围、终态 Request ID、Trace ID、模型和成功/失败/拒绝/取消筛选。它展示 CPA 已上报的事件，也包括没有 Token 用量的请求，不代表覆盖全部 HTTP 请求。终态 ID 和用量执行 ID 属于不同层级，同一 Trace 可有多个事件，不进行一对一关联。没有事件不能推断请求仍在运行；取消事件未提供 HTTP 状态时显示为未提供。
+
+页面使用 `/lifecycle?view=events` 的固定字段投影，不传输任意 Metadata；省略 `view` 的原始管理接口保留兼容。终态缺少完成时间时，查询和保留策略使用接收时间。用量和终态共享 `retention_days`；手工清理在同一事务删除选定范围的两类记录，响应分别提供 `deleted_records`、`deleted_lifecycle_records`，空间统计增加 `lifecycle_record_count`。
+
+CPA 的非空 Request ID 表示唯一执行实例。插件在保留窗口内忽略重复 ID 的后续用量投递，采用首次写入值；保留历史重复数据，也兼容没有 ID 的旧记录。队列满或插件暂停时返回明确拒收错误，支持重试的宿主路径可据此重投；普通本地宿主不保证重试，成功回执只表示接受异步队列，不代表已经持久化。终态回调保持实例锁直至落盘，避免重配置关闭正在写入的库。
+
+### 调用明细筛选
+
+模型、提供商、客户端 Key、凭据与执行结果按实际存储值匹配。Trace、会话、Selection ID 精确条件收纳到“高级筛选”；Selection ID 只在调度器提供时存在。关键字按原文子串匹配请求/追踪/调度/会话 ID、模型、别名、客户端 Key 和失败正文，`%`、`_` 不作为通配符。空格归一化和组合防抖避免页码反复回到第一页；筛选只作用于调用明细，概览使用独立的全局时间范围。停留明细页时下拉选项每60秒更新，认证失败后停止自动探测。
+
 ### 汇总接口
 
 `GET /v0/management/plugins/cpa-usage-stats/summary` 保持完整响应，原有 `range` 和筛选参数继续生效。
