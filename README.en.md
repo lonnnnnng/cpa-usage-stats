@@ -14,6 +14,14 @@ Forked from [tom2almighty/cpa-usage-stats](https://github.com/tom2almighty/cpa-u
 - Overview, records and filter options load independently. Pagination does not recalculate summaries, and periodic refresh reuses an in-flight request.
 - Added frontend security and backend concurrency regression tests. This repository's store source and Releases distribute the fixed fork; the original upstream source does not include this fork's independent changes.
 
+### Integrated upstream improvements
+
+- Management Center v2 persisted credentials (`a8ee040`): reads remembered v2 state bound to the current host, preserving plugin and panel key precedence.
+- Kimi/Moonshot pricing mapping (`ca686b3`) and Google RPC error classification (`136d895`). Error classification applies to new records; existing records are not backfilled.
+- Modality token counters (`a1a1c70`) and 5-minute/1-hour cache write TTL counters (`ace0ed1`): persists optional breakdowns and displays them in record details. Missing counters are omitted; explicit zero values are displayed.
+
+These improvements come from [tom2almighty/cpa-usage-stats](https://github.com/tom2almighty/cpa-usage-stats) and retain this fork's summary optimization, time handling and security tests. Migration adds 13 nullable columns while preserving existing records. Availability depends on host/provider reporting; historical breakdowns cannot be recovered from totals. Cost estimates continue to use the existing aggregate token pricing.
+
 ## Overview
 
 - Collects requests, tokens, latency and failures, then writes them to SQLite in asynchronous batches.
@@ -98,7 +106,7 @@ plugins:
 
 Artifacts are written to `release-dist/` with platform archives and `checksums.txt`.
 
-Pushing a `v*` tag runs the Release workflow and publishes platform packages. Release can also be rerun manually in GitHub Actions, but the selected ref must be a version tag. CI supports manual runs as well.
+Pushing a `v*` tag runs the Release workflow and publishes the Linux ARM64 package. Release can also be rerun manually in GitHub Actions, but the selected ref must be a version tag. CI supports manual runs as well.
 
 ### Usage
 

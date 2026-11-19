@@ -73,6 +73,9 @@ const PROVIDER_HINTS: Record<string, string[]> = {
   vertex: ["google-vertex", "google"],
   interactions: ["google"],
   xai: ["xai"],
+  // 作者：long。CPA的Kimi别名对应Moonshot官方定价，避免同名模型误取其他渠道价格。
+  kimi: ["moonshotai", "moonshot"],
+  "kimi-ai": ["moonshotai", "moonshot"],
   meta: ["meta", "meta-llama"],
   devin: ["devin", "cognition"],
 };

@@ -127,6 +127,20 @@ export interface StoredRecord {
   cache_read_tokens: number;
   cache_creation_tokens: number;
   total_tokens: number;
+  /** 作者：long。未上报的细分允许缺失；明确的0表示上游已统计且没有消耗。 */
+  cache_creation_5m_tokens?: number | null;
+  cache_creation_1h_tokens?: number | null;
+  text_input_tokens?: number | null;
+  image_input_tokens?: number | null;
+  audio_input_tokens?: number | null;
+  video_input_tokens?: number | null;
+  file_input_tokens?: number | null;
+  cached_text_tokens?: number | null;
+  cached_image_tokens?: number | null;
+  cached_audio_tokens?: number | null;
+  text_output_tokens?: number | null;
+  image_output_tokens?: number | null;
+  audio_output_tokens?: number | null;
 }
 
 export interface RecordListResponse {

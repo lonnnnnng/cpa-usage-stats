@@ -14,6 +14,7 @@ import {
   UnauthorizedError,
 } from "../src/lib/api.ts";
 import { resolveManagementKey } from "../src/lib/auth.ts";
+import { encodeCenterState } from "./helpers/auth-fixture.ts";
 
 const origin = "http://127.0.0.1:8317";
 const basePath = "/v0/management/plugins/cpa-usage-stats";
@@ -118,7 +119,9 @@ for (const source of ["own", "panel", "center"] as const) {
     const local = new Map<string, string>();
     if (source === "own") local.set("cpa-usage-stats.management-key", key);
     if (source === "panel") local.set("cpa-dashboard.management-key", key);
-    if (source === "center") local.set("cli-proxy-auth", JSON.stringify({ managementKey: key }));
+    if (source === "center") {
+      local.set("cli-proxy-auth", encodeCenterState({ state: { managementKey: key, rememberPassword: true } }));
+    }
     setBrowser("?api_base=https%3A%2F%2Fattacker.invalid", local);
     assert.deepEqual(resolveManagementKey(), { key, source });
     const fetchMock = mock.method(globalThis, "fetch", async () => Response.json({}));

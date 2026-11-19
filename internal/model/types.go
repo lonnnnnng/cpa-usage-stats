@@ -70,6 +70,21 @@ type UsageDetail struct {
 	CacheReadTokens     int64 `json:"CacheReadTokens"`
 	CacheCreationTokens int64 `json:"CacheCreationTokens"`
 	TotalTokens         int64 `json:"TotalTokens"`
+
+	// 作者：long。可选细分保留上游未报告与明确零值的区别，不能从总量推算TTL或模态。
+	CacheCreation5mTokens *int64 `json:"CacheCreation5mTokens,omitempty"`
+	CacheCreation1hTokens *int64 `json:"CacheCreation1hTokens,omitempty"`
+	TextInputTokens       *int64 `json:"TextInputTokens,omitempty"`
+	ImageInputTokens      *int64 `json:"ImageInputTokens,omitempty"`
+	AudioInputTokens      *int64 `json:"AudioInputTokens,omitempty"`
+	VideoInputTokens      *int64 `json:"VideoInputTokens,omitempty"`
+	FileInputTokens       *int64 `json:"FileInputTokens,omitempty"`
+	CachedTextTokens      *int64 `json:"CachedTextTokens,omitempty"`
+	CachedImageTokens     *int64 `json:"CachedImageTokens,omitempty"`
+	CachedAudioTokens     *int64 `json:"CachedAudioTokens,omitempty"`
+	TextOutputTokens      *int64 `json:"TextOutputTokens,omitempty"`
+	ImageOutputTokens     *int64 `json:"ImageOutputTokens,omitempty"`
+	AudioOutputTokens     *int64 `json:"AudioOutputTokens,omitempty"`
 }
 
 // StoredRecord represents a record stored in SQLite and returned by the
@@ -115,6 +130,20 @@ type StoredRecord struct {
 	CacheReadTokens      int64               `json:"cache_read_tokens"`
 	CacheCreationTokens  int64               `json:"cache_creation_tokens"`
 	TotalTokens          int64               `json:"total_tokens"`
+	// 作者：long。旧记录没有细分时省略字段，让客户端识别数据缺失而非零消耗。
+	CacheCreation5mTokens *int64 `json:"cache_creation_5m_tokens,omitempty"`
+	CacheCreation1hTokens *int64 `json:"cache_creation_1h_tokens,omitempty"`
+	TextInputTokens       *int64 `json:"text_input_tokens,omitempty"`
+	ImageInputTokens      *int64 `json:"image_input_tokens,omitempty"`
+	AudioInputTokens      *int64 `json:"audio_input_tokens,omitempty"`
+	VideoInputTokens      *int64 `json:"video_input_tokens,omitempty"`
+	FileInputTokens       *int64 `json:"file_input_tokens,omitempty"`
+	CachedTextTokens      *int64 `json:"cached_text_tokens,omitempty"`
+	CachedImageTokens     *int64 `json:"cached_image_tokens,omitempty"`
+	CachedAudioTokens     *int64 `json:"cached_audio_tokens,omitempty"`
+	TextOutputTokens      *int64 `json:"text_output_tokens,omitempty"`
+	ImageOutputTokens     *int64 `json:"image_output_tokens,omitempty"`
+	AudioOutputTokens     *int64 `json:"audio_output_tokens,omitempty"`
 }
 
 // ManagementRequest describes an incoming HTTP request via management API.

@@ -50,9 +50,13 @@ const (
 // error identifier, in priority order.
 var errorTypeKeys = []string{"$.error.type", "$.error.code", "$.type", "$.code"}
 
+// 作者：long。Google没有字符串错误码时才以状态文本兜底，保留原有错误类型优先级。
+var errorStatusKeys = []string{"$.error.status", "$.status"}
+
 // extractErrorType pulls a short machine-readable error identifier out of an
 // upstream failure body. Upstream error shapes vary (OpenAI/Anthropic nest it
-// under "error", Google/Azure keep it flat), so several paths are probed.
+// under "error", Google RPC uses numeric error.code + error.status + details[],
+// Azure keeps it flat), so several paths are probed.
 // It returns "" when the body is not a JSON object or carries no identifier.
 func extractErrorType(body string) string {
 	trimmed := strings.TrimSpace(body)
@@ -70,7 +74,48 @@ func extractErrorType(body string) string {
 		}
 		return value[:min(len(value), maxErrorType)]
 	}
+	if reason := extractGoogleErrorReason(parsed); reason != "" {
+		return reason[:min(len(reason), maxErrorType)]
+	}
+	for _, path := range errorStatusKeys {
+		value, ok := resolveString(parsed, strings.Split(strings.TrimPrefix(path, "$."), "."))
+		if !ok || value == "" {
+			continue
+		}
+		return value[:min(len(value), maxErrorType)]
+	}
 	return ""
+}
+
+// 作者：long。优先提取Google ErrorInfo的具体原因，让封禁、权限和配额失败可按原因分组。
+func extractGoogleErrorReason(parsed map[string]any) string {
+	errObj, ok := parsed["error"].(map[string]any)
+	if !ok {
+		return ""
+	}
+	details, ok := errObj["details"].([]any)
+	if !ok {
+		return ""
+	}
+	fallback := ""
+	for _, item := range details {
+		detail, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		reason, _ := detail["reason"].(string)
+		reason = strings.TrimSpace(reason)
+		if reason == "" {
+			continue
+		}
+		if typ, _ := detail["@type"].(string); strings.HasSuffix(typ, "google.rpc.ErrorInfo") {
+			return reason
+		}
+		if fallback == "" {
+			fallback = reason
+		}
+	}
+	return fallback
 }
 
 // resolveString walks a parsed JSON object along path segments.
@@ -205,6 +250,20 @@ var tableColumns = []struct{ name, ddl string }{
 	{"cache_read_tokens", "INTEGER NOT NULL DEFAULT 0"},
 	{"cache_creation_tokens", "INTEGER NOT NULL DEFAULT 0"},
 	{"total_tokens", "INTEGER NOT NULL DEFAULT 0"},
+	// 作者：long。只追加可空列，历史记录不补零，升级及回退都保留原有统计。
+	{"cache_creation_5m_tokens", "INTEGER"},
+	{"cache_creation_1h_tokens", "INTEGER"},
+	{"text_input_tokens", "INTEGER"},
+	{"image_input_tokens", "INTEGER"},
+	{"audio_input_tokens", "INTEGER"},
+	{"video_input_tokens", "INTEGER"},
+	{"file_input_tokens", "INTEGER"},
+	{"cached_text_tokens", "INTEGER"},
+	{"cached_image_tokens", "INTEGER"},
+	{"cached_audio_tokens", "INTEGER"},
+	{"text_output_tokens", "INTEGER"},
+	{"image_output_tokens", "INTEGER"},
+	{"audio_output_tokens", "INTEGER"},
 }
 
 // tableIndexes are applied on every open. requested_at leads every range query;
@@ -347,8 +406,12 @@ func (s *Storage) InsertBatch(records []model.UsageRecord) error {
 			stream, generate, requested_at, latency_ms, ttft_ms,
 			failed, status_code, error_type, failure_body, response_headers,
 			input_tokens, output_tokens, reasoning_tokens,
-			cached_tokens, cache_read_tokens, cache_creation_tokens, total_tokens
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			cached_tokens, cache_read_tokens, cache_creation_tokens, total_tokens,
+			cache_creation_5m_tokens, cache_creation_1h_tokens, text_input_tokens, image_input_tokens,
+			audio_input_tokens, video_input_tokens, file_input_tokens, cached_text_tokens,
+			cached_image_tokens, cached_audio_tokens, text_output_tokens, image_output_tokens,
+			audio_output_tokens
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`)
 	if err != nil {
 		return fmt.Errorf("prepare insert: %w", err)
@@ -413,6 +476,19 @@ func (s *Storage) InsertBatch(records []model.UsageRecord) error {
 			r.Detail.CacheReadTokens,
 			r.Detail.CacheCreationTokens,
 			r.Detail.TotalTokens,
+			r.Detail.CacheCreation5mTokens,
+			r.Detail.CacheCreation1hTokens,
+			r.Detail.TextInputTokens,
+			r.Detail.ImageInputTokens,
+			r.Detail.AudioInputTokens,
+			r.Detail.VideoInputTokens,
+			r.Detail.FileInputTokens,
+			r.Detail.CachedTextTokens,
+			r.Detail.CachedImageTokens,
+			r.Detail.CachedAudioTokens,
+			r.Detail.TextOutputTokens,
+			r.Detail.ImageOutputTokens,
+			r.Detail.AudioOutputTokens,
 		)
 		if err != nil {
 			return fmt.Errorf("exec insert: %w", err)
@@ -693,7 +769,11 @@ func (s *Storage) GetRecords(filter model.UsageFilter) (*model.RecordListRespons
 			stream, generate, requested_at, latency_ms, ttft_ms,
 			failed, status_code, COALESCE(error_type, ''), COALESCE(failure_body, ''), COALESCE(response_headers, ''),
 			input_tokens, output_tokens, reasoning_tokens,
-			cached_tokens, cache_read_tokens, cache_creation_tokens, total_tokens
+			cached_tokens, cache_read_tokens, cache_creation_tokens, total_tokens,
+			cache_creation_5m_tokens, cache_creation_1h_tokens, text_input_tokens, image_input_tokens,
+			audio_input_tokens, video_input_tokens, file_input_tokens, cached_text_tokens,
+			cached_image_tokens, cached_audio_tokens, text_output_tokens, image_output_tokens,
+			audio_output_tokens
 		FROM usage_records
 		%s
 		ORDER BY id DESC
@@ -749,6 +829,19 @@ func (s *Storage) GetRecords(filter model.UsageFilter) (*model.RecordListRespons
 			&r.CacheReadTokens,
 			&r.CacheCreationTokens,
 			&r.TotalTokens,
+			&r.CacheCreation5mTokens,
+			&r.CacheCreation1hTokens,
+			&r.TextInputTokens,
+			&r.ImageInputTokens,
+			&r.AudioInputTokens,
+			&r.VideoInputTokens,
+			&r.FileInputTokens,
+			&r.CachedTextTokens,
+			&r.CachedImageTokens,
+			&r.CachedAudioTokens,
+			&r.TextOutputTokens,
+			&r.ImageOutputTokens,
+			&r.AudioOutputTokens,
 		); err != nil {
 			return nil, fmt.Errorf("scan record: %w", err)
 		}
