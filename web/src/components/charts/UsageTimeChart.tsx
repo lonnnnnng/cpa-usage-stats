@@ -7,7 +7,7 @@ import { useI18n } from "@/i18n/context";
 import type { UsageMetric } from "@/lib/metrics";
 import { costPerToken } from "@/lib/pricing";
 import { cn, formatBucket, formatDuration } from "@/lib/utils";
-import type { SummaryData } from "@/types";
+import type { OverviewData } from "@/types";
 
 type SeriesKey = "success" | "failed" | "input" | "output" | "cost" | "speed" | "avg" | "p95";
 
@@ -49,7 +49,7 @@ const METRIC_SERIES: Record<UsageMetric, SeriesKey[]> = {
 };
 
 interface UsageTimeChartProps {
-  summary: SummaryData | null;
+  summary: OverviewData | null;
   metric: UsageMetric;
   pricing: PricingState;
   className?: string;

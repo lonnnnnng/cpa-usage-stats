@@ -16,7 +16,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useFormat } from "@/hooks/use-format";
 import { useI18n } from "@/i18n/context";
-import { clearStorage, fetchStorage, keyFingerprint, reclaimStorage } from "@/lib/api";
+import { clearStorage, fetchStorage, keyFingerprint, reclaimStorage, UnauthorizedError } from "@/lib/api";
 import { cn, formatBytes, formatDateTimeFull } from "@/lib/utils";
 import type { StorageCleanupRange, StorageStats } from "@/types";
 
@@ -42,7 +42,7 @@ function InfoRow({ label, value, mono = true }: { label: string; value: string; 
 }
 
 /** 空间占用：数据库文件大小、记录范围、保留策略与手动回收。 */
-export function StorageTab({ apiKey }: { apiKey: string }) {
+export function StorageTab({ apiKey, authorized }: { apiKey: string; authorized: boolean }) {
   const { t } = useI18n();
   const { formatNumber } = useFormat();
   const queryClient = useQueryClient();
@@ -50,11 +50,12 @@ export function StorageTab({ apiKey }: { apiKey: string }) {
   const [clearOpen, setClearOpen] = useState(false);
   const [cleanupRange, setCleanupRange] = useState<StorageCleanupRange>("today");
 
-  const queryKey = ["usage-storage", keyFingerprint(apiKey)];
+  const queryKey = ["usage", keyFingerprint(apiKey), "storage"];
   const query = useQuery<StorageStats>({
     queryKey,
-    enabled: Boolean(apiKey),
-    queryFn: () => fetchStorage(apiKey),
+    enabled: Boolean(apiKey) && authorized,
+    retry: (count, error) => !(error instanceof UnauthorizedError) && count < 1,
+    queryFn: ({ signal }) => fetchStorage(apiKey, signal),
     refetchOnWindowFocus: false,
   });
 
@@ -112,7 +113,7 @@ export function StorageTab({ apiKey }: { apiKey: string }) {
               variant="outline"
               size="sm"
               className="gap-1.5"
-              disabled={!data || busy}
+              disabled={!authorized || !data || busy}
               onClick={() => setClearOpen(true)}
             >
               {busy ? <RefreshCw className="animate-spin" /> : <Eraser />}
@@ -122,7 +123,7 @@ export function StorageTab({ apiKey }: { apiKey: string }) {
               variant="outline"
               size="sm"
               className="gap-1.5"
-              disabled={!data || busy}
+              disabled={!authorized || !data || busy}
               onClick={() => setReclaimOpen(true)}
             >
               <Recycle />

@@ -10,6 +10,8 @@ Forked from [tom2almighty/cpa-usage-stats](https://github.com/tom2almighty/cpa-u
 
 - Management requests are same-origin only and reject redirects. The `api_base` page parameter, which could send a management key to another server, is removed.
 - Runtime statistics use per-instance snapshots, avoiding recursive read-lock deadlocks during concurrent statistics queries and reconfiguration/quiesce.
+- Summaries use one scan of the required columns while preserving grouping, cache billing and percentile semantics. Lifecycle time indexes and separate count/time endpoint queries speed up lifecycle and storage reads.
+- Overview, records and filter options load independently. Pagination does not recalculate summaries, and periodic refresh reuses an in-flight request.
 - Added frontend security and backend concurrency regression tests. This repository's store source and Releases distribute the fixed fork; the original upstream source does not include this fork's independent changes.
 
 ## Overview
@@ -17,6 +19,14 @@ Forked from [tom2almighty/cpa-usage-stats](https://github.com/tom2almighty/cpa-u
 - Collects requests, tokens, latency and failures, then writes them to SQLite in asynchronous batches.
 - Embedded dashboard with usage trends, breakdowns, token composition, an activity heatmap, request details and storage usage.
 - Configurable retention, excluded models and batch-write parameters.
+
+### Summary API
+
+`GET /v0/management/plugins/cpa-usage-stats/summary` retains the complete response and existing range/filter parameters.
+
+The dashboard uses `summary?range=all&view=overview` (also supported for other ranges). This view includes all overview metrics, trends and model/provider/API key/credential/session groups. It skips `trace_stats`, `selection_stats`, `unique_traces`, `unique_sessions`, `lifecycle` and `failure_stats`, which the overview does not display. Omitting `view` continues to return those fields.
+
+The existing management key is still required. The five included dimensions are not truncated, preserving pricing and dimension selection behavior.
 
 ## Development
 

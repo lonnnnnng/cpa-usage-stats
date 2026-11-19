@@ -224,6 +224,18 @@ type SummaryResponse struct {
 	Trend          []TrendPoint     `json:"trend"`
 }
 
+// OverviewResponse 仅序列化首页消费的数据；完整 SummaryResponse 仍供原接口客户端使用。作者：long。
+type OverviewResponse struct {
+	*SummaryResponse
+	// 作者：long。显式覆盖嵌入字段且省略，避免首页为未展示的关联明细传输数万条数据。
+	Traces         []GroupStat       `json:"trace_stats,omitempty"`
+	Selections     []GroupStat       `json:"selection_stats,omitempty"`
+	UniqueTraces   *int64            `json:"unique_traces,omitempty"`
+	UniqueSessions *int64            `json:"unique_sessions,omitempty"`
+	Lifecycle      *LifecycleSummary `json:"lifecycle,omitempty"`
+	Failures       []FailureStat     `json:"failure_stats,omitempty"`
+}
+
 // LifecycleSummary counts terminal request events independently from usage
 // records, so rejected/canceled requests remain visible even without tokens.
 type LifecycleSummary struct {

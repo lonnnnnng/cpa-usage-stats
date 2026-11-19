@@ -3,10 +3,10 @@ import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis
 import { useFormat } from "@/hooks/use-format";
 import { useI18n } from "@/i18n/context";
 import { cn } from "@/lib/utils";
-import type { SummaryData } from "@/types";
+import type { OverviewData } from "@/types";
 
 interface TokenBarChartProps {
-  summary: SummaryData | null;
+  summary: OverviewData | null;
   className?: string;
 }
 

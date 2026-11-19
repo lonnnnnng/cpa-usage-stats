@@ -72,6 +72,12 @@ export interface SummaryData {
   trend: TrendPoint[];
 }
 
+/** 作者：long。首页不下载按请求增长的关联明细，完整接口的类型保持独立。 */
+export type OverviewData = Omit<
+  SummaryData,
+  "trace_stats" | "selection_stats" | "unique_traces" | "unique_sessions" | "lifecycle" | "failure_stats"
+>;
+
 export interface LifecycleSummary {
   total: number;
   succeeded: number;

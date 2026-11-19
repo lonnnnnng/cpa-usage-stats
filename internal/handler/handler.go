@@ -30,9 +30,21 @@ func Handle(store *storage.Storage, html []byte, req model.ManagementRequest, re
 	filter, hourly := parseFilter(req.Query)
 	switch strings.TrimPrefix(req.Path, APIBasePath) {
 	case "/summary":
-		summary, err := store.GetSummary(filter, hourly)
+		// 作者：long。只在显式选择概览时裁剪关联明细，省略 view 的旧客户端仍收到完整统计。
+		overview := len(req.Query["view"]) > 0 && req.Query["view"][0] == "overview"
+		var summary *model.SummaryResponse
+		var err error
+		if overview {
+			summary, err = store.GetOverview(filter, hourly)
+		} else {
+			summary, err = store.GetSummary(filter, hourly)
+		}
 		if err != nil {
 			return jsonError(http.StatusInternalServerError, "query_summary_failed", err.Error())
+		}
+		summary.DroppedRecords = stats.DroppedRecords
+		if overview {
+			return jsonOK(model.OverviewResponse{SummaryResponse: summary})
 		}
 		return jsonOK(summary)
 	case "/records":

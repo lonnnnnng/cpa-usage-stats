@@ -5,7 +5,7 @@ import { useFormat } from "@/hooks/use-format";
 import { useI18n } from "@/i18n/context";
 import { costPerToken, type PricingTable } from "@/lib/pricing";
 import { cn, formatDisplayDateKey, parseBackendTimestamp } from "@/lib/utils";
-import type { SummaryData } from "@/types";
+import type { OverviewData } from "@/types";
 
 export type HeatmapMetric = "tokens" | "requests" | "cost";
 
@@ -46,7 +46,7 @@ export function ActivityHeatmap({
   pricingTable,
   className,
 }: {
-  summary: SummaryData | null;
+  summary: OverviewData | null;
   pricingTable: PricingTable | null;
   className?: string;
 }) {

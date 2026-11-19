@@ -38,11 +38,11 @@ import {
 } from "@/lib/metrics";
 import { groupCostDetails, type ModelPrice, type PriceSuggestion, suggestPrices, totalCost } from "@/lib/pricing";
 import { formatDuration, formatPercent } from "@/lib/utils";
-import type { SummaryData } from "@/types";
+import type { OverviewData } from "@/types";
 
 /** 概览拆成多个页签后，每块内容都吃同一份 summary，由 Dashboard 按页签分发。 */
 interface OverviewSectionProps {
-  summary: SummaryData | null;
+  summary: OverviewData | null;
   loading: boolean;
   pricing: PricingState;
 }
@@ -337,7 +337,7 @@ export function OverviewSummary({ summary, loading, pricing }: OverviewSectionPr
 }
 
 /** 未匹配定价的模型：模型表移除后保留唯一的改价入口，成本指标才能被修正。 */
-function UnmatchedPricing({ models, pricing }: { models: SummaryData["model_stats"]; pricing: PricingState }) {
+function UnmatchedPricing({ models, pricing }: { models: OverviewData["model_stats"]; pricing: PricingState }) {
   const { t } = useI18n();
   const [editing, setEditing] = useState<{
     modelName: string;

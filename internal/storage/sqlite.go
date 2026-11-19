@@ -283,6 +283,16 @@ func (s *Storage) ensureSchema() error {
 		return fmt.Errorf("create lifecycle trace index: %w", err)
 	}
 
+	// 作者：long。终态列表按接收时间排序，范围统计按完成时间筛选，分别建索引避免每次扫描并排序全表。
+	for _, index := range []string{
+		`CREATE INDEX IF NOT EXISTS idx_lifecycle_completed ON request_lifecycle(completed_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_lifecycle_received ON request_lifecycle(received_at DESC)`,
+	} {
+		if _, err := s.db.Exec(index); err != nil {
+			return fmt.Errorf("create lifecycle time index: %w", err)
+		}
+	}
+
 	if version != schemaVersion {
 		if _, err := s.db.Exec("PRAGMA user_version = " + fmt.Sprint(schemaVersion)); err != nil {
 			return fmt.Errorf("set user_version: %w", err)
@@ -508,6 +518,10 @@ func (s *Storage) GetLifecycle(filter model.UsageFilter) (*model.LifecycleListRe
 		pageSize = 20
 	}
 	pageSize = min(pageSize, 100)
+	// 作者：long。先用总数判断空页，避免无效列表扫描，也避免极大页码乘法溢出。
+	if total == 0 || int64(page-1) > (total-1)/int64(pageSize) {
+		return &model.LifecycleListResponse{Total: total, Page: page, PageSize: pageSize, Items: []model.LifecycleEvent{}}, nil
+	}
 	rows, err := s.db.Query(`SELECT request_id, COALESCE(trace_id, ''), COALESCE(source_format, ''),
 		COALESCE(model, ''), COALESCE(requested_model, ''), stream, outcome, status_code,
 		COALESCE(error, ''), COALESCE(started_at, ''), COALESCE(completed_at, ''),
@@ -608,241 +622,6 @@ func buildWhere(filter model.UsageFilter) (string, []interface{}) {
 	return where, args
 }
 
-// GetSummary returns aggregated statistics for the filter. The trend is
-// bucketed by hour when hourly is true, by day otherwise.
-func (s *Storage) GetSummary(filter model.UsageFilter, hourly bool) (*model.SummaryResponse, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	where, args := buildWhere(filter)
-
-	resp := &model.SummaryResponse{Bucket: "day"}
-	var cachePromptTokens int64
-	// Latency percentiles come from the same single pass: CUME_DIST gives each
-	// row its cumulative share, so the first row reaching the target share is
-	// the nearest-rank percentile (PERCENT_RANK would return the row below it).
-	err := s.db.QueryRow(fmt.Sprintf(`
-		SELECT
-			COUNT(*),
-			COALESCE(SUM(failed), 0),
-			COALESCE(SUM(total_tokens), 0),
-			COALESCE(SUM(input_tokens), 0),
-			COALESCE(SUM(output_tokens), 0),
-			COALESCE(SUM(reasoning_tokens), 0),
-			COALESCE(SUM(cached_tokens), 0),
-			COALESCE(SUM(`+effectiveCacheReadSQL+`), 0),
-			COALESCE(SUM(cache_creation_tokens), 0),
-			COALESCE(AVG(latency_ms), 0),
-			COALESCE(AVG(CASE WHEN stream = 1 AND ttft_ms > 0 THEN ttft_ms END), 0),
-			COALESCE(MIN(CASE WHEN pct >= 0.5 THEN latency_ms END), 0),
-			COALESCE(MIN(CASE WHEN pct >= 0.95 THEN latency_ms END), 0),
-			COALESCE(MIN(CASE WHEN pct >= 0.99 THEN latency_ms END), 0),
-			COALESCE(SUM(CASE WHEN stream = 1 THEN 1 ELSE 0 END), 0),
-			COALESCE(AVG(CASE WHEN stream = 1 AND latency_ms > ttft_ms AND output_tokens > 0
-				THEN output_tokens * 1000.0 / (latency_ms - ttft_ms) END), 0)
-			, COALESCE(SUM(`+cachePromptSQL+`), 0)
-		FROM (
-			SELECT *, CUME_DIST() OVER (ORDER BY latency_ms) AS pct FROM usage_records %s
-		)
-	`, where), args...).Scan(
-		&resp.TotalRequests,
-		&resp.FailedRequests,
-		&resp.TotalTokens,
-		&resp.InputTokens,
-		&resp.OutputTokens,
-		&resp.ReasoningTokens,
-		&resp.CachedTokens,
-		&resp.CacheReadTokens,
-		&resp.CacheCreationTokens,
-		&resp.AvgLatencyMs,
-		&resp.AvgTTFTMs,
-		&resp.P50LatencyMs,
-		&resp.P95LatencyMs,
-		&resp.P99LatencyMs,
-		&resp.StreamRequests,
-		&resp.AvgOutputTps,
-		&cachePromptTokens,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("query total summary: %w", err)
-	}
-	resp.SuccessRequests = resp.TotalRequests - resp.FailedRequests
-	if resp.TotalRequests > 0 {
-		resp.SuccessRate = float64(resp.SuccessRequests) / float64(resp.TotalRequests) * 100
-	} else {
-		resp.SuccessRate = 100
-	}
-	// 同一份汇总可能同时包含 OpenAI/Codex 与 Anthropic；SQL 已按每条记录
-	// 的协议语义计算 prompt 分母，避免把两种 token 口径混成一个比例。作者：long
-	if cachePromptTokens > 0 {
-		resp.CacheHitRate = float64(resp.CacheReadTokens) / float64(cachePromptTokens) * 100
-	}
-
-	// Every dimension shares the same shape, so they are declared once and
-	// filled in a loop instead of repeating the plumbing per group.
-	groups := []struct {
-		groupBy   string
-		secondary string
-		target    *[]model.GroupStat
-	}{
-		{"model, provider", "model", &resp.Models},
-		{"provider", "", &resp.Providers},
-		{"api_key", "", &resp.APIKeys},
-		{"auth_id, auth_index, auth_type", "auth", &resp.Auths},
-		{"session_id", "", &resp.Sessions},
-		{"trace_id", "", &resp.Traces},
-		{"selection_id", "", &resp.Selections},
-	}
-	for _, group := range groups {
-		stats, err := s.groupStats(group.groupBy, group.secondary, where, args)
-		if err != nil {
-			return nil, err
-		}
-		if err := s.db.QueryRow(fmt.Sprintf("SELECT COUNT(DISTINCT NULLIF(trace_id, '')), COUNT(DISTINCT NULLIF(session_id, '')) FROM usage_records %s", where), args...).Scan(&resp.UniqueTraces, &resp.UniqueSessions); err != nil {
-			return nil, fmt.Errorf("query correlation counts: %w", err)
-		}
-		if resp.Lifecycle, err = s.GetLifecycleSummaryLocked(filter); err != nil {
-			return nil, err
-		}
-		*group.target = stats
-	}
-
-	if resp.Failures, err = s.failureStats(where, args); err != nil {
-		return nil, err
-	}
-
-	// "2006-01-02 15" for hours, "2006-01-02" for days.
-	bucketLen := 10
-	if hourly {
-		resp.Bucket = "hour"
-		bucketLen = 13
-	}
-	rows, err := s.db.Query(fmt.Sprintf(`
-		SELECT
-			bucket,
-			COUNT(*),
-			COALESCE(SUM(failed), 0),
-			COALESCE(SUM(total_tokens), 0),
-			COALESCE(SUM(input_tokens), 0),
-			COALESCE(SUM(output_tokens), 0),
-			COALESCE(AVG(latency_ms), 0),
-			COALESCE(MIN(CASE WHEN pct >= 0.95 THEN latency_ms END), 0)
-		FROM (
-			SELECT *, SUBSTR(requested_at, 1, %[1]d) AS bucket,
-				CUME_DIST() OVER (PARTITION BY SUBSTR(requested_at, 1, %[1]d) ORDER BY latency_ms) AS pct
-			FROM usage_records %[2]s
-		)
-		GROUP BY bucket
-		ORDER BY bucket
-	`, bucketLen, where), args...)
-	if err != nil {
-		return nil, fmt.Errorf("query trend: %w", err)
-	}
-	defer rows.Close()
-
-	resp.Trend = []model.TrendPoint{}
-	for rows.Next() {
-		var p model.TrendPoint
-		if err := rows.Scan(
-			&p.Bucket,
-			&p.Requests,
-			&p.Failed,
-			&p.Tokens,
-			&p.InputTokens,
-			&p.OutputTokens,
-			&p.AvgLatencyMs,
-			&p.P95LatencyMs,
-		); err != nil {
-			return nil, fmt.Errorf("scan trend: %w", err)
-		}
-		resp.Trend = append(resp.Trend, p)
-	}
-	return resp, rows.Err()
-}
-
-// groupStats aggregates usage by one dimension. groupBy and secondary are
-// fixed column lists from GetSummary, never user input. secondary selects the
-// extra columns carried into GroupStat.Secondary:
-//   - "model": the provider the model was served by
-//   - "auth": the upstream credential identity
-func (s *Storage) groupStats(groupBy, secondary, where string, args []interface{}) ([]model.GroupStat, error) {
-	// auth rows carry three identity columns; everything else groups on the
-	// raw column list (model, provider groups on two).
-	selectCols := groupBy
-	if secondary == "auth" {
-		selectCols = "auth_id, auth_index, auth_type"
-	}
-
-	rows, err := s.db.Query(fmt.Sprintf(`
-		SELECT
-			%[1]s,
-			COUNT(*) AS requests,
-			COALESCE(SUM(failed), 0),
-			COALESCE(SUM(total_tokens), 0) AS tokens,
-			COALESCE(SUM(input_tokens), 0),
-			COALESCE(SUM(output_tokens), 0),
-			COALESCE(SUM(reasoning_tokens), 0),
-			COALESCE(SUM(cached_tokens), 0),
-			COALESCE(SUM(`+effectiveCacheReadSQL+`), 0),
-			COALESCE(SUM(cache_creation_tokens), 0),
-			COALESCE(AVG(latency_ms), 0),
-			COALESCE(MIN(CASE WHEN pct >= 0.95 THEN latency_ms END), 0),
-			COALESCE(AVG(CASE WHEN stream = 1 AND ttft_ms > 0 THEN ttft_ms END), 0),
-			COALESCE(SUM(CASE WHEN stream = 1 THEN 1 ELSE 0 END), 0)
-		FROM (
-			SELECT *, CUME_DIST() OVER (PARTITION BY %[1]s ORDER BY latency_ms) AS pct
-			FROM usage_records %[2]s
-		)
-		GROUP BY %[1]s
-		ORDER BY tokens DESC, requests DESC
-	`, selectCols, where), args...)
-	if err != nil {
-		return nil, fmt.Errorf("query %s stats: %w", groupBy, err)
-	}
-	defer rows.Close()
-
-	stats := []model.GroupStat{}
-	for rows.Next() {
-		var g model.GroupStat
-		var name, second, third string
-		dest := []any{&name}
-		if secondary != "" {
-			dest = append(dest, &second)
-		}
-		if secondary == "auth" {
-			dest = append(dest, &third)
-		}
-		dest = append(dest,
-			&g.Requests,
-			&g.Failed,
-			&g.TotalTokens,
-			&g.InputTokens,
-			&g.OutputTokens,
-			&g.ReasoningTokens,
-			&g.CachedTokens,
-			&g.CacheReadTokens,
-			&g.CacheCreationTokens,
-			&g.AvgLatencyMs,
-			&g.P95LatencyMs,
-			&g.AvgTtftMs,
-			&g.StreamRequests,
-		)
-		if err := rows.Scan(dest...); err != nil {
-			return nil, fmt.Errorf("scan %s stats: %w", groupBy, err)
-		}
-		g.Name = name
-		g.Secondary = second
-		if secondary == "auth" {
-			// auth_id is the group key; show its type alongside for readability.
-			if third != "" {
-				g.Name = fmt.Sprintf("%s · %s", name, third)
-			}
-		}
-		stats = append(stats, g)
-	}
-	return stats, rows.Err()
-}
-
 // failureStats groups failed requests by upstream status and error type, and
 // attaches one truncated sample body per group for quick triage.
 func (s *Storage) failureStats(where string, args []interface{}) ([]model.FailureStat, error) {
@@ -898,6 +677,10 @@ func (s *Storage) GetRecords(filter model.UsageFilter) (*model.RecordListRespons
 		pageSize = 20
 	}
 	pageSize = min(pageSize, 100)
+	// 作者：long。超末页只返回总数与空数组，保持原分页契约并避免 OFFSET 溢出。
+	if total == 0 || int64(page-1) > (total-1)/int64(pageSize) {
+		return &model.RecordListResponse{Total: total, Page: page, PageSize: pageSize, Items: []model.StoredRecord{}}, nil
+	}
 
 	rows, err := s.db.Query(fmt.Sprintf(`
 		SELECT
@@ -1047,7 +830,9 @@ func (s *Storage) Stats(retentionDays int) (*model.StorageStats, error) {
 	var recordCount int64
 	var oldest, newest sql.NullString
 	if err := s.db.QueryRow(
-		"SELECT COUNT(*), MIN(requested_at), MAX(requested_at) FROM usage_records",
+		// 作者：long。独立标量子查询让 COUNT 使用计数路径，最早/最晚时间各取索引端点。
+		`SELECT (SELECT COUNT(*) FROM usage_records),
+		 (SELECT MIN(requested_at) FROM usage_records), (SELECT MAX(requested_at) FROM usage_records)`,
 	).Scan(&recordCount, &oldest, &newest); err != nil {
 		return nil, fmt.Errorf("query storage totals: %w", err)
 	}

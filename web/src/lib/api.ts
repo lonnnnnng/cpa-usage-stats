@@ -1,5 +1,6 @@
 import type {
   OptionsResponse,
+  OverviewData,
   RecordListResponse,
   RuntimeStats,
   StorageCleanupRange,
@@ -32,7 +33,13 @@ interface ApiFilters {
   keyword?: string;
 }
 
-async function request<T>(key: string, path: string, params: Record<string, string>, method = "GET"): Promise<T> {
+async function request<T>(
+  key: string,
+  path: string,
+  params: Record<string, string>,
+  method = "GET",
+  signal?: AbortSignal,
+): Promise<T> {
   // 没有密钥就不发请求：CPA 会把无鉴权请求计入认证失败次数，连续 5 次会封禁该 IP
   if (!key) throw new UnauthorizedError();
 
@@ -40,6 +47,7 @@ async function request<T>(key: string, path: string, params: Record<string, stri
   const suffix = query.toString() ? `?${query}` : "";
   const res = await fetch(`${resolveApiBase()}${API_BASE}${path}${suffix}`, {
     method,
+    signal,
     headers: { Authorization: `Bearer ${key}` },
     // 作者：long。管理接口只允许同源直达，部署层的跳转也不能携带管理密钥继续请求。
     mode: "same-origin",
@@ -76,8 +84,13 @@ function filterParams(filters: ApiFilters): Record<string, string> {
   };
 }
 
-export function fetchSummary(key: string, filters: ApiFilters): Promise<SummaryData> {
-  return request<SummaryData>(key, "/summary", filterParams(filters));
+export function fetchSummary(key: string, filters: ApiFilters, signal?: AbortSignal): Promise<SummaryData> {
+  return request<SummaryData>(key, "/summary", filterParams(filters), "GET", signal);
+}
+
+// 作者：long。概览保留图表所需的五维数据，关联明细只在完整汇总中生成。
+export function fetchOverview(key: string, filters: ApiFilters, signal?: AbortSignal): Promise<OverviewData> {
+  return request<OverviewData>(key, "/summary", { ...filterParams(filters), view: "overview" }, "GET", signal);
 }
 
 export function fetchRecords(
@@ -85,24 +98,31 @@ export function fetchRecords(
   filters: ApiFilters,
   page: number,
   pageSize: number,
+  signal?: AbortSignal,
 ): Promise<RecordListResponse> {
-  return request<RecordListResponse>(key, "/records", {
-    ...filterParams(filters),
-    page: String(page),
-    page_size: String(pageSize),
-  });
+  return request<RecordListResponse>(
+    key,
+    "/records",
+    {
+      ...filterParams(filters),
+      page: String(page),
+      page_size: String(pageSize),
+    },
+    "GET",
+    signal,
+  );
 }
 
-export function fetchOptions(key: string): Promise<OptionsResponse> {
-  return request<OptionsResponse>(key, "/options", {});
+export function fetchOptions(key: string, signal?: AbortSignal): Promise<OptionsResponse> {
+  return request<OptionsResponse>(key, "/options", {}, "GET", signal);
 }
 
 export function fetchStats(key: string): Promise<RuntimeStats> {
   return request<RuntimeStats>(key, "/stats", {});
 }
 
-export function fetchStorage(key: string): Promise<StorageStats> {
-  return request<StorageStats>(key, "/storage", {});
+export function fetchStorage(key: string, signal?: AbortSignal): Promise<StorageStats> {
+  return request<StorageStats>(key, "/storage", {}, "GET", signal);
 }
 
 /** 执行 VACUUM 回收空闲页，返回回收后的最新占用。 */

@@ -10,6 +10,8 @@ CLIProxyAPI（CPA 8.0+）用量统计插件：通过 usage 插件接口采集请
 
 - 管理请求固定同源，并拒绝重定向，移除可能将管理密钥发送至外站的 `api_base` 页面参数。
 - 运行时统计通过实例快照传递，修复统计查询与重配置/暂停并发时递归读锁可能造成的死锁。
+- 汇总改为一次窄列扫描，保留原分组、缓存计费和百分位口径；请求终态增加时间索引，空间统计分别走计数与时间端点查询。
+- 首页、明细、筛选选项独立加载，翻页不重新计算汇总；定时刷新复用在途请求，避免慢请求叠加。
 - 增加前端安全与后端并发回归测试。本仓库的插件源与 Releases 指向 fork 修复版；原作者的上游源不包含本 fork 的独立修复。
 
 ## 项目简介
@@ -25,6 +27,14 @@ CLIProxyAPI（CPA 8.0+）用量统计插件：通过 usage 插件接口采集请
 - 调用明细保存调度选择 ID，并支持 Trace/Selection/Session 筛选与聚合；
 - `/v0/management/plugins/cpa-usage-stats/lifecycle` 提供请求终态分页，区分 `succeeded`、`failed`、`rejected`、`canceled`；
 - 旧 SQLite 数据库采用追加式迁移；Worker 停止幂等，批量写入失败会有限重试并报告 `write_errors`。
+
+### 汇总接口
+
+`GET /v0/management/plugins/cpa-usage-stats/summary` 保持完整响应，原有 `range` 和筛选参数继续生效。
+
+首页使用 `summary?range=all&view=overview`（其他范围同样支持），返回全部概览指标、趋势及模型、供应商、客户端 Key、凭据、会话五个维度。这个视图不计算或返回 `trace_stats`、`selection_stats`、`unique_traces`、`unique_sessions`、`lifecycle`、`failure_stats`，避免为首页未展示的关联明细生成和传输大量数据；省略 `view` 仍返回这些字段。
+
+上述接口仍需原管理密钥。概览不会截断五个维度的结果，费用和维度切换沿用原始完整分组。
 
 ## 开发环境配置
 

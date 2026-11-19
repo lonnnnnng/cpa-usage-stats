@@ -5,6 +5,7 @@ import { afterEach, mock, test } from "node:test";
 import {
   clearStorage,
   fetchOptions,
+  fetchOverview,
   fetchRecords,
   fetchStats,
   fetchStorage,
@@ -19,6 +20,7 @@ const basePath = "/v0/management/plugins/cpa-usage-stats";
 const key = "synthetic-test-key-not-a-real-secret";
 const filters = { range: "all", model: "", provider: "", apiKey: "", authId: "", sessionId: "" };
 const endpoints = [
+  { path: "/summary", method: "GET", call: (value: string) => fetchOverview(value, filters) },
   { path: "/summary", method: "GET", call: (value: string) => fetchSummary(value, filters) },
   { path: "/records", method: "GET", call: (value: string) => fetchRecords(value, filters, 1, 20) },
   { path: "/options", method: "GET", call: fetchOptions },
@@ -27,6 +29,16 @@ const endpoints = [
   { path: "/storage/reclaim", method: "POST", call: reclaimStorage },
   { path: "/storage/clear", method: "POST", call: (value: string) => clearStorage(value, "all") },
 ];
+
+test("overview selects compact projection and forwards cancellation", async () => {
+  setBrowser();
+  const controller = new AbortController();
+  const fetchMock = mock.method(globalThis, "fetch", async () => Response.json({ total_requests: 0 }));
+  await fetchOverview(key, filters, controller.signal);
+  const [input, init] = fetchMock.mock.calls[0].arguments;
+  assert.equal(new URL(String(input)).searchParams.get("view"), "overview");
+  assert.equal(init?.signal, controller.signal);
+});
 
 const browserGlobals = ["window", "localStorage", "sessionStorage"] as const;
 const descriptors = new Map(browserGlobals.map((name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)]));

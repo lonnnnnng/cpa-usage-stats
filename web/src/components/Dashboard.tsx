@@ -1,6 +1,6 @@
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ChartColumn, KeyRound, RefreshCw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { DisplaySettings } from "@/components/DisplaySettings";
 import { KeyDialog } from "@/components/KeyDialog";
 import { LanguageToggle } from "@/components/language-toggle";
@@ -19,9 +19,10 @@ import { useFormat } from "@/hooks/use-format";
 import { useManagementKey } from "@/hooks/use-management-key";
 import { usePricing } from "@/hooks/use-pricing";
 import { useI18n } from "@/i18n/context";
-import { fetchOptions, fetchRecords, fetchSummary, keyFingerprint, UnauthorizedError } from "@/lib/api";
+import { UnauthorizedError } from "@/lib/api";
+import { usageQueryOptions } from "@/lib/usage-queries";
 import { cn } from "@/lib/utils";
-import type { OptionsResponse, RecordListResponse, RecordsFilters, SummaryData, TimeRange } from "@/types";
+import type { RecordsFilters, TimeRange } from "@/types";
 
 /** 概览拆成多页签后的页签值；@/types 里的 TabKey 只有 overview/records 两态，已不适用 */
 type TabKey = "overview" | "records" | "storage";
@@ -49,12 +50,6 @@ const EMPTY_FILTERS: RecordsFilters = {
   keyword: "",
 };
 
-interface LoadResult {
-  summary: SummaryData;
-  records: RecordListResponse;
-  options: OptionsResponse;
-}
-
 export function Dashboard() {
   const { t } = useI18n();
   const { formatNumber } = useFormat();
@@ -72,50 +67,68 @@ export function Dashboard() {
   // 输入密钥后先保持弹窗，等这一轮请求成功再自动关闭，失败则原地显示错误
   const [savingKey, setSavingKey] = useState(false);
 
-  const query = useQuery<LoadResult>({
-    queryKey: ["usage", keyFingerprint(key), range, filters, page, pageSize],
-    enabled: Boolean(key),
-    retry: (count, error) => !(error instanceof UnauthorizedError) && count < 2,
-    placeholderData: keepPreviousData,
-    queryFn: async () => {
-      // 先用 options 探测密钥：密钥错误时只消耗 1 次认证失败计数（CPA 连续 5 次失败封禁 IP 30 分钟）
-      const options = await fetchOptions(key);
-      const failed = filters.status === "all" ? undefined : filters.status === "failed" ? "true" : "false";
-      const shared = { ...filters, range, failed };
-      const [summary, records] = await Promise.all([
-        fetchSummary(key, shared),
-        fetchRecords(key, shared, page, pageSize),
-      ]);
-      return { summary, records, options };
-    },
+  const queryClient = useQueryClient();
+  const definitions = usageQueryOptions(key, range, filters, page, pageSize);
+  // 作者：long。首次只发送认证探针；错误密钥不重试、不定时重探，防止触发宿主封禁。
+  const optionsQuery = useQuery({ ...definitions.options, enabled: Boolean(key) });
+  const authorized = optionsQuery.isSuccess && !optionsQuery.error;
+  const interval = Number(autoRefresh) > 0 ? Number(autoRefresh) * 1000 : false;
+  const summaryQuery = useQuery({
+    ...definitions.summary,
+    enabled: authorized && tab === "overview",
+    refetchInterval: (query) => (query.state.error instanceof UnauthorizedError ? false : interval),
   });
+  const recordsQuery = useQuery({
+    ...definitions.records,
+    enabled: authorized && tab === "records",
+    refetchInterval: (query) => (query.state.error instanceof UnauthorizedError ? false : interval),
+  });
+  const activeQuery = tab === "records" ? recordsQuery : summaryQuery;
+  const error = optionsQuery.error ?? activeQuery.error;
+  const unauthorized = error instanceof UnauthorizedError;
+  const loading = Boolean(key) && !error && (optionsQuery.isPending || (summaryQuery.isPending && !summaryQuery.data));
+  const recordsLoading =
+    Boolean(key) && !error && (optionsQuery.isPending || (recordsQuery.isPending && !recordsQuery.data));
+  const refreshing = recordsQuery.isFetching && Boolean(recordsQuery.data);
+  const isFetching = optionsQuery.isFetching || activeQuery.isFetching;
+  const summary = summaryQuery.data ?? null;
+  const records = recordsQuery.data ?? null;
+  const options = optionsQuery.data ?? { models: [], providers: [], api_keys: [], auths: [] };
+  const empty = !summaryQuery.isPlaceholderData && summary !== null && summary.total_requests === 0;
 
-  const { refetch, isPending, isFetching } = query;
-  // 作者：long。后台刷新必须保留已有结果，只有首次没有数据时才显示骨架屏，避免列表闪空。
-  const loading = isPending && !query.data;
-  const refreshing = isFetching && Boolean(query.data);
+  const changeFilters = useCallback((next: RecordsFilters) => {
+    setFilters(next);
+    setPage(1);
+  }, []);
 
-  useEffect(() => {
-    const seconds = Number(autoRefresh);
-    if (!key || !seconds) return;
-    const id = setInterval(() => void refetch(), seconds * 1000);
-    return () => clearInterval(id);
-  }, [autoRefresh, key, refetch]);
+  const refresh = async () => {
+    if (!key) return;
+    // 作者：long。手动刷新先验密钥，定时刷新由 Query 复用在途请求，不取消重启慢查询。
+    const verified = await optionsQuery.refetch({ cancelRefetch: false });
+    if (verified.isSuccess) {
+      if (tab === "storage") {
+        await queryClient.invalidateQueries({ queryKey: definitions.storageKey });
+      } else {
+        await activeQuery.refetch({ cancelRefetch: false });
+      }
+    }
+  };
 
-  const unauthorized = query.error instanceof UnauthorizedError;
-  const summary = query.data?.summary ?? null;
-  const records = query.data?.records ?? null;
-  const options = query.data?.options ?? { models: [], providers: [], api_keys: [], auths: [] };
-  const empty = summary !== null && summary.total_requests === 0;
-
-  // 新密钥验证通过后自动收起弹窗
-  useEffect(() => {
-    if (!savingKey || loading) return;
-    if (!unauthorized) {
+  const saveKey = async (next: string) => {
+    const value = next.trim();
+    setSavingKey(true);
+    // 作者：long。保存相同密钥也显式重验；只有这次探针成功才能收起输入框，不能借用旧占位数据。
+    try {
+      setKey(value);
+      const definition = usageQueryOptions(value, range, filters, page, pageSize).options;
+      await queryClient.fetchQuery({ ...definition, staleTime: 0 });
       setKeyDialogOpen(false);
+    } catch {
+      // 错误保留在 options query，输入框继续显示，便于用户修正或重试。
+    } finally {
       setSavingKey(false);
     }
-  }, [savingKey, loading, unauthorized]);
+  };
 
   return (
     <div className="w-full max-w-none space-y-4 p-4 md:p-6">
@@ -138,10 +151,10 @@ export function Dashboard() {
         </Alert>
       )}
 
-      {query.error && !unauthorized && (
+      {error && !unauthorized && (
         <Alert variant="destructive">
           <AlertTriangle />
-          <AlertTitle>{t("dashboard.load_failed", { message: (query.error as Error).message })}</AlertTitle>
+          <AlertTitle>{t("dashboard.load_failed", { message: (error as Error).message })}</AlertTitle>
         </Alert>
       )}
 
@@ -216,7 +229,7 @@ export function Dashboard() {
               variant="outline"
               size="sm"
               className="gap-1.5"
-              onClick={() => void refetch()}
+              onClick={() => void refresh()}
               disabled={!key || isFetching}
             >
               <RefreshCw className={cn(isFetching && "animate-spin")} />
@@ -273,14 +286,11 @@ export function Dashboard() {
         <TabsContent value="records">
           <RecordsTab
             data={records}
-            loading={loading}
+            loading={recordsLoading}
             refreshing={refreshing}
             options={options}
             filters={filters}
-            onFiltersChange={(next) => {
-              setFilters(next);
-              setPage(1);
-            }}
+            onFiltersChange={changeFilters}
             page={page}
             onPageChange={setPage}
             pageSize={pageSize}
@@ -294,7 +304,7 @@ export function Dashboard() {
         </TabsContent>
 
         <TabsContent value="storage">
-          <StorageTab apiKey={key} />
+          <StorageTab apiKey={key} authorized={authorized} />
         </TabsContent>
       </Tabs>
 
@@ -311,10 +321,9 @@ export function Dashboard() {
         }}
         hasKey={Boolean(key)}
         source={source}
-        error={unauthorized ? t("dashboard.key.invalid") : ""}
+        error={unauthorized ? t("dashboard.key.invalid") : (error?.message ?? "")}
         onSave={(next) => {
-          setKey(next);
-          setSavingKey(true);
+          if (!savingKey) void saveKey(next);
         }}
         onClear={() => {
           clear();
